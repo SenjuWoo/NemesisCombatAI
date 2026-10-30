@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+  <moduleName>Nemesis Combat AI 3.0.0</moduleName>
+  <requiredInstallFiles>
+    <folder source="00 Core" destination="" priority="0" />
+  </requiredInstallFiles>
+  <installSteps order="Explicit">
+    <installStep name="Nemesis Combat AI">
+      <optionalFileGroups order="Explicit">
+        <group name="Combat tactics" type="SelectExactlyOne">
+          <plugins order="Explicit">
+            <plugin name="Full tactics (recommended)">
+              <description>Installs the native morale layer plus tiered combat styles for human melee, Draugr, archers, Forsworn, bosses and mages. Fighters are graded from untrained brawlers up to masters; low-level enemies fight dumb and break easily, high-level ones block, bash, circle and flank, and mages are graded by their own level from standing-and-bolting up to kiting archmages. Replaces SkyTactics. Movesets are not touched: For Honor / BFCO keeps them.</description>
+              <files>
+                <folder source="10 Tactics" destination="" priority="0" />
+              </files>
+              <typeDescriptor>
+                <type name="Recommended" />
+              </typeDescriptor>
+            </plugin>
+            <plugin name="Morale only (no combat style changes)">
+              <description>Installs only the native morale layer: NPC nerve, rout, last stand. Leaves every combat style as vanilla or as another mod set it.</description>
+              <conditionFlags>
+                <flag name="MoraleOnly">On</flag>
+              </conditionFlags>
+              <typeDescriptor>
+                <type name="Optional" />
+              </typeDescriptor>
+            </plugin>
+          </plugins>
+        </group>
+        <group name="Optional integrations (greyed out = that mod is not active)" type="SelectAny">
+          <plugins order="Explicit">
+            <plugin name="Dynamic Grip: grip switching for schooled fighters">
+              <description>Greyed out: Dynamic Grip is not active in your load order. Selectable: Dynamic Grip was detected. Installs a setting so only schooled fighters (Trained tier or better, never casters) switch between one- and two-handed grips in combat, instead of every NPC. For Honor weapon masters are shielded from Dynamic Grip whether or not you pick this, because Dynamic Grip's animation replacers outrank most For Honor movesets.</description>
+              <files>
+                <folder source="20 Dynamic Grip" destination="" priority="0" />
+              </files>
+              <typeDescriptor>
+                <dependencyType>
+                  <defaultType name="NotUsable" />
+                  <patterns>
+                    <pattern>
+                      <dependencies operator="And">
+                        <fileDependency file="DynamicGrip.esp" state="Active" />
+                      </dependencies>
+                      <type name="Recommended" />
+                    </pattern>
+                  </patterns>
+                </dependencyType>
+              </typeDescriptor>
+            </plugin>
+          </plugins>
+        </group>
+        <group name="Detected in your load order (ticked and locked = found, greyed out = not installed)" type="SelectAny">
+          <plugins order="Explicit">
+            <plugin name="For Honor in Skyrim BFCO: keeps the movesets and wins">
+              <description>Ticked and locked: For Honor was detected. Greyed out: it is not active (nothing to do). For Honor wins. Movesets stay with For Honor, and every NPC that For Honor picks as a weapon master (it carries FH's perk) is treated by the Nemesis brain as an Elite fighter and is kept out of Dynamic Grip. Nemesis never touches OAR, perks, parry rules or animation variables.</description>
+              <conditionFlags>
+                <flag name="SeenForHonor">On</flag>
+              </conditionFlags>
+              <typeDescriptor>
+                <dependencyType>
+                  <defaultType name="NotUsable" />
+                  <patterns>
+                    <pattern>
+                      <dependencies operator="And">
+                        <fileDependency file="ForHonorBFCO.esp" state="Active" />
+                      </dependencies>
+                      <type name="Required" />
+                    </pattern>
+                  </patterns>
+                </dependencyType>
+              </typeDescriptor>
+            </plugin>
+            <plugin name="SkyTactics: disable it (replaced by this mod)">
+              <description>Ticked and locked: SkyTactics is active, which you should change. Greyed out: it is not active, nothing to do. Nemesis tiered styles cover the same ground (human melee, archers, Draugr, Forsworn, bosses). Disable SkyTactics - Dynamic Combat Styles.esp so only one system sets combat styles. Nemesis rules load first, but SkyTactics' class-based Draugr and Forsworn rules would otherwise overwrite them.</description>
+              <conditionFlags>
+                <flag name="SeenSkyTactics">On</flag>
+              </conditionFlags>
+              <typeDescriptor>
+                <dependencyType>
+                  <defaultType name="NotUsable" />
+                  <patterns>
+                    <pattern>
+                      <dependencies operator="And">
+                        <fileDependency file="SkyTactics - Dynamic Combat Styles.esp" state="Active" />
+                      </dependencies>
+                      <type name="Required" />
+                    </pattern>
+                  </patterns>
+                </dependencyType>
+              </typeDescriptor>
+            </plugin>
+            <plugin name="NPC Spell Variance: keeps the spells">
+              <description>Ticked and locked: NPC Spell Variance was detected. Greyed out: it is not active (nothing to do). Spells stay with NPC Spell Variance. Nemesis only grades how mages position and fall back, not which spells they cast.</description>
+              <conditionFlags>
+                <flag name="SeenSpellVariance">On</flag>
+              </conditionFlags>
+              <typeDescriptor>
+                <dependencyType>
+                  <defaultType name="NotUsable" />
+                  <patterns>
+                    <pattern>
+                      <dependencies operator="And">
+                        <fileDependency file="NPC Spell Variance.esp" state="Active" />
+                      </dependencies>
+                      <type name="Required" />
+                    </pattern>
+                  </patterns>
+                </dependencyType>
+              </typeDescriptor>
+            </plugin>
+            <plugin name="Settings menu: needs SkyUI and MCM Helper">
+              <description>Ticked and locked: SkyUI and MCM Helper are both active, so the Nemesis settings menu will appear in the Mod Configuration menu. Greyed out: one of them is not active in your load order. The mod still works with its default settings, but the menu will not appear; install SkyUI and MCM Helper (with its SKSE plugin) to get it.</description>
+              <conditionFlags>
+                <flag name="SettingsMenuReady">On</flag>
+              </conditionFlags>
+              <typeDescriptor>
+                <dependencyType>
+                  <defaultType name="NotUsable" />
+                  <patterns>
+                    <pattern>
+                      <dependencies operator="And">
+                        <fileDependency file="SkyUI_SE.esp" state="Active" />
+                        <fileDependency file="MCMHelper.esp" state="Active" />
+                      </dependencies>
+                      <type name="Required" />
+                    </pattern>
+                  </patterns>
+                </dependencyType>
+              </typeDescriptor>
+            </plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+  </installSteps>
+</config>

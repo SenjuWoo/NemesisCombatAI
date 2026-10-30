@@ -1,0 +1,158 @@
+{
+    "modName": "NemesisCombatAI",
+    "displayName": "Nemesis Combat AI",
+    "minMcmVersion": 9,
+    "pluginRequirements": [
+        "NemesisCombatAI.esp"
+    ],
+    "pages": [
+        {
+            "pageDisplayName": "General",
+            "cursorFillMode": "topToBottom",
+            "content": [
+                {
+                    "text": "Nemesis Combat AI",
+                    "type": "header"
+                },
+                {
+                    "id": "bEnabled",
+                    "text": "Enable Nemesis AI",
+                    "help": "Master toggle for the native combat-mind layer (event-driven, no Papyrus, no per-frame work). It only shifts NPC Confidence, the engine's own flee-or-hold decision. Movesets stay with For Honor / BFCO. Faction combat styles (SkyPatcher) are applied at game load and ignore this toggle.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|815",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "text": "Core Features",
+                    "type": "header"
+                },
+                {
+                    "id": "bCounterTactics",
+                    "text": "Situational Reactions",
+                    "help": "NPCs size up their target: facing someone much higher level shakes low-tier fighters, and trained fighters push in on archers and mages instead of breaking.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|817",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "id": "bGroupTactics",
+                    "text": "Group Morale",
+                    "help": "Nearby fighting allies, a stronger leader at their side, friends dying around them and being outnumbered change an NPC's nerve. Rabble swing hard with the crowd; veterans and elites hold steady.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|816",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "id": "bEquipmentThreat",
+                    "text": "Gear Counts Toward Training",
+                    "help": "Heavier armor adds a little to how capable an NPC is judged to be. Level, combat skill, faction rank and leader titles always count.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|818",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "id": "bBerserkMode",
+                    "text": "Last Stand",
+                    "help": "Veteran and elite fighters (not casters or Thalmor) turn desperate below 25% health instead of fleeing, and calm down again above 50%. No stat bonuses.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|823",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "text": "Runtime Safety",
+                    "type": "header"
+                },
+                {
+                    "text": "Defaults protect followers, uniques, essentials and anyone not hostile to you. The runtime never starts combat, never touches movesets, attacks, animations, perks or packages.",
+                    "type": "text"
+                },
+                {
+                    "id": "bSkipUniques",
+                    "text": "Skip Unique NPCs",
+                    "help": "Leave named characters on vanilla behavior. Turn OFF to let named captains, chiefs and other titled leaders fight with full elite judgment. ON by default for quest safety.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|824",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "id": "bSkipFollowers",
+                    "text": "Skip Followers / Teammates",
+                    "help": "Skip player teammates, commanded actors, CurrentFollowerFaction and PotentialFollowerFaction. NFF and your follower framework keep full control. ON by default.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|825",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "id": "bSkipEssential",
+                    "text": "Skip Essential NPCs",
+                    "help": "Skip essential actors (many quest followers/companions). ON by default.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|826",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "id": "bSkipFriendly",
+                    "text": "Only Enemies of the Player",
+                    "help": "ON: only NPCs hostile to you get this AI. OFF: also NPC-versus-NPC fights such as guards against bandits and civil war skirmishes.",
+                    "type": "toggle",
+                    "valueOptions": {
+                        "sourceType": "GlobalValue",
+                        "sourceForm": "NemesisCombatAI.esp|827",
+                        "defaultValue": 1.0
+                    }
+                },
+                {
+                    "text": "Load-Time Faction Styles",
+                    "type": "header"
+                },
+                {
+                    "text": "SkyPatcher never changes Aggression or Confidence.",
+                    "type": "text"
+                },
+                {
+                    "text": "Tiered combat styles for human melee, Draugr, archers, Forsworn, bosses and mages: untrained fighters brawl, trained ones fight as soldiers, veterans duel or hold a shield wall, elites bash, block and flank. Mages are graded by their own level when the game loads. The older Thalmor, Vampire, Dremora, Warlock, Necromancer and Silver Hand pools only apply in Morale-only installs.",
+                    "type": "text"
+                },
+                {
+                    "text": "Melee tiers follow the vanilla csHumanMeleeLvl1-7 grade. Disable NemesisCombatAI_Styles.esp to go back to SkyTactics or vanilla styles. Caster grading and the Dynamic Grip option are set in Data\\SKSE\\Plugins\\NemesisCombatAI.d\\*.ini (see the mod page).",
+                    "type": "text"
+                },
+                {
+                    "type": "empty"
+                },
+                {
+                    "text": "Needs MCM Helper and SkyUI (SkyUI 5.2 SE or any working SkyUI MCM).",
+                    "type": "text"
+                },
+                {
+                    "text": "The runtime layer is native (SKSE\\Plugins\\NemesisCombatAI.dll) and includes the required MCM registration quest. If the menu is missing, verify MCM Helper + SkyUI and reinstall the complete archive.",
+                    "type": "text"
+                }
+            ]
+        }
+    ]
+}

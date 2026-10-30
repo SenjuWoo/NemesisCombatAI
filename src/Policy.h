@@ -1,0 +1,160 @@
+// Pure combat-mind policy: who an NPC is and what is happening around it decide how much nerve it has.
+// Movesets, attacks and animation graphs belong to For Honor / BFCO and are never touched here.
+#pragma once
+
+#include <algorithm>
+#include <cmath>
+
+namespace NCAI
+{
+    enum class Doctrine { Neutral, Military, Bandit, Forsworn, Thalmor, Vampire, Daedra, Undead, Caster };
+    enum class Tier { Rabble, Trained, Veteran, Elite };
+
+    struct Profile
+    {
+        Doctrine doctrine = Doctrine::Neutral;
+        float level = 1.0F;
+        float skill = 0.0F;  // best combat skill, 0..100
+        float rank = 0.0F;   // rank in the doctrine faction, 0 when unranked
+        float gear = 0.0F;   // 0..1 equipment quality; 0 when the gear option is off
+        bool unique = false;
+        bool titled = false; // name carries a leader title (Captain, Chief, Jarl ...)
+        bool boss = false;   // uses a vanilla boss combat style
+        bool master = false; // For Honor picked this fighter as a weapon master (it carries FH's perk)
+    };
+
+    struct Situation
+    {
+        float health = 1.0F;       // current / maximum health
+        unsigned allies = 0;       // living friends fighting within range
+        unsigned foes = 1;         // living enemies fighting within range
+        unsigned casualties = 0;   // friends that died nearby recently
+        bool leaderNear = false;   // a clearly more capable friend is alive nearby
+        bool leaderDown = false;   // such a friend died nearby recently
+        float foeLevel = 1.0F;     // level of the current target
+        bool foeRanged = false;
+        bool lastStandActive = false; // previous verdict, gives the rage an exit threshold
+        bool groupAware = true;
+        bool situational = true;
+        bool lastStand = true;
+    };
+
+    struct Mind
+    {
+        float intellect = 0.0F;      // 0..1
+        Tier tier = Tier::Rabble;
+        float confidenceShift = 0.0F; // added to the actor's authored Confidence
+        bool lastStand = false;
+    };
+
+    inline float Bounded(float value, float low, float high, float fallback)
+    {
+        return std::isfinite(value) ? std::clamp(value, low, high) : fallback;
+    }
+
+    constexpr float kEliteFloor = 0.60F;  // lowest Intellect that TierOf() calls Elite
+
+    // Level and trained skill dominate; rank and rare titles lift individual leaders above their peers.
+    inline float Intellect(const Profile& p)
+    {
+        const float level = (Bounded(p.level, 1.0F, 40.0F, 1.0F) - 1.0F) / 39.0F;
+        const float skill = Bounded(p.skill, 0.0F, 100.0F, 0.0F) / 100.0F;
+        const float rank = Bounded(p.rank, 0.0F, 6.0F, 0.0F) / 6.0F;
+        const float gear = Bounded(p.gear, 0.0F, 1.0F, 0.0F);
+        const float value = 0.35F * level + 0.30F * skill + 0.10F * rank + 0.05F * gear
+            + (p.unique ? 0.10F : 0.0F) + (p.titled ? 0.15F : 0.0F) + (p.boss ? 0.15F : 0.0F);
+        // For Honor only picks masters of steel, so the brain treats them as Elite whatever their level says.
+        return std::clamp(p.master ? std::max(value, kEliteFloor) : value, 0.0F, 1.0F);
+    }
+
+    inline Tier TierOf(float intellect)
+    {
+        if (intellect < 0.20F) return Tier::Rabble;
+        if (intellect < 0.40F) return Tier::Trained;
+        if (intellect < 0.60F) return Tier::Veteran;
+        return Tier::Elite;
+    }
+
+    // Dynamic Grip lets an NPC swap between one- and two-handed grips mid-fight. Only schooled fighters get that,
+    // and never a For Honor master: DG's OAR replacers outrank most For Honor ones, so a swap would replace its moveset.
+    inline bool GripSchooled(Tier tier, Doctrine doctrine, bool master)
+    {
+        return !master && tier >= Tier::Trained && doctrine != Doctrine::Caster;
+    }
+
+    // Which of a pool's two styles an NPC gets: stable per NPC so a save always sees the same fighter.
+    inline unsigned PoolSlot(unsigned formId)
+    {
+        return (formId >> 4) & 1U;
+    }
+
+    inline bool Fearless(Doctrine d)
+    {
+        return d == Doctrine::Undead || d == Doctrine::Daedra;
+    }
+
+    inline Mind Think(const Profile& p, const Situation& s)
+    {
+        // Per tier: resting nerve, how strongly morale swings move it, and how health loss erodes it.
+        static constexpr float kNerve[] = { -0.75F, 0.0F, 0.25F, 0.5F };
+        static constexpr float kSway[] = { 1.5F, 1.0F, 0.7F, 0.4F };
+        static constexpr float kPain[] = { 1.0F, 0.75F, 0.5F, 0.25F };
+
+        Mind mind;
+        mind.intellect = Intellect(p);
+        mind.tier = TierOf(mind.intellect);
+        const auto t = static_cast<std::size_t>(mind.tier);
+        const float health = Bounded(s.health, 0.0F, 1.0F, 1.0F);
+
+        float morale = 0.0F;
+        if (s.groupAware) {
+            morale += 0.25F * static_cast<float>(std::min(s.allies, 4U));   // safety in numbers
+            morale -= 0.5F * static_cast<float>(std::min(s.casualties, 4U)); // friends dropping around you
+            if (s.leaderNear) morale += 0.75F;
+            if (s.leaderDown) morale -= 1.0F;
+            if (s.foes > s.allies + 1) {
+                morale -= 0.5F * static_cast<float>(std::min(s.foes - s.allies - 1, 2U)); // outnumbered
+            }
+        }
+        if (s.situational) {
+            const float gap = (Bounded(s.foeLevel, 1.0F, 100.0F, 1.0F) - Bounded(p.level, 1.0F, 100.0F, 1.0F)) / 10.0F;
+            if (gap > 0.0F) morale -= 0.5F * std::min(gap, 2.0F); // facing something far stronger
+            if (s.foeRanged && mind.tier >= Tier::Trained) morale += 0.5F; // trained fighters rush archers
+        }
+
+        float shift = kNerve[t] + morale * kSway[t];
+        shift -= std::clamp((0.5F - health) / 0.5F, 0.0F, 1.0F) * kPain[t];
+
+        switch (p.doctrine) {
+        case Doctrine::Military:
+            if (s.groupAware && s.allies > 0 && !s.leaderDown) shift += 0.25F; // discipline holds the line
+            break;
+        case Doctrine::Bandit:
+            if (s.groupAware && s.casualties > 0) shift -= 0.25F; // mercenary nerve
+            break;
+        case Doctrine::Forsworn:
+        case Doctrine::Thalmor:
+            shift += 0.25F;
+            break;
+        case Doctrine::Vampire:
+            if (health > 0.5F) shift += 0.25F;
+            break;
+        default:
+            break;
+        }
+
+        if (Fearless(p.doctrine)) {
+            shift = std::max(shift, 1.0F);
+        }
+
+        // Experienced fighters turn desperate instead of breaking; the rage ends once they recover.
+        const float exitHealth = s.lastStandActive ? 0.5F : 0.25F;
+        mind.lastStand = s.lastStand && mind.tier >= Tier::Veteran && health < exitHealth
+            && p.doctrine != Doctrine::Thalmor && p.doctrine != Doctrine::Caster;
+        if (mind.lastStand) shift = std::max(shift, 2.0F);
+
+        // Quantized so tiny fluctuations never cause repeated writes.
+        mind.confidenceShift = std::round(std::clamp(shift, -2.5F, 2.5F) * 4.0F) / 4.0F;
+        return mind;
+    }
+}

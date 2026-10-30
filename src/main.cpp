@@ -1,0 +1,753 @@
+// Nemesis Combat AI 3.0: event-driven NPC combat mind. It only shifts Confidence (the engine's own
+// flee/hold decision) per actor from who it is and what happens around it, and grades pure-caster combat
+// styles by level. No hooks, no per-frame work, no animation, attack, perk or package changes: For Honor /
+// BFCO owns movesets, and where another mod (Dynamic Grip) could override them for a For Honor master, the
+// master wins.
+#include "Policy.h"
+#include "StyleIds.h"
+
+#include <RE/Skyrim.h>
+#include <SKSE/SKSE.h>
+#include <spdlog/sinks/basic_file_sink.h>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+using namespace std::literals;
+
+SKSEPluginInfo(
+    .Version = REL::Version{ 3, 0, 0, 0 },
+    .Name = "NemesisCombatAI"sv,
+    .Author = "GennyWoo"sv,
+    .StructCompatibility = SKSE::StructCompatibility::Independent,
+    .RuntimeCompatibility = SKSE::VersionIndependence::AddressLibrary);
+
+namespace
+{
+    using Clock = std::chrono::steady_clock;
+    using namespace NCAI;
+
+    constexpr std::uint32_t kCoSaveId = 0x4E4D5349;     // 'NMSI', unchanged from 2.x so old co-saves still restore
+    constexpr std::uint32_t kCoSaveVersion = 1;         // formID + 4 floats (aggression, confidence, attack damage, speed)
+    constexpr std::size_t kRecordSize = 20;
+    constexpr std::size_t kMaxTracked = 64;
+    constexpr std::size_t kMaxPending = 4096;
+    constexpr float kRadiusSq = 1800.0F * 1800.0F;      // "nearby" for allies, foes and casualties
+    constexpr auto kCasualtyWindow = 25s;
+    constexpr auto kEvalCooldown = 1s;
+    constexpr auto kSweepInterval = 2s;
+
+    struct Legacy { float aggression = 0, confidence = 0, attack = 0, speed = 0; };
+
+    struct Tracked
+    {
+        float applied = 0.0F;                 // Confidence delta currently on the actor, owned by us
+        bool lastStand = false;
+        Clock::time_point next{};
+        Clock::time_point leaderDownUntil{};
+        std::vector<Clock::time_point> casualties;
+    };
+
+    struct Settings
+    {
+        bool enabled, group, situational, gear, lastStand, skipUnique, skipFollower, skipEssential, skipFriendly;
+    };
+
+    // Integration switches, merged from Data/SKSE/Plugins/NemesisCombatAI.d/*.ini (the FOMOD ships one file per
+    // option it detected a matching mod for; users may add their own, later file names win).
+    struct Config
+    {
+        bool casterTiers = true;   // regrade pure-caster combat styles by level (needs NemesisCombatAI_Styles.esp)
+        bool gripTiers = false;    // Dynamic Grip only for schooled fighters (For Honor masters are always excluded)
+        std::vector<std::pair<std::string, RE::FormID>> extraCasterStyles;  // CasterStyle=Plugin.esp|HexFormID
+    } g_cfg;
+
+    struct Integrations
+    {
+        RE::BGSPerk* masterPerk{};      // ForHonorBFCO.esp 0xD7B, SPID marks weapon masters with it
+        RE::BGSKeyword* gripBlock{};    // DynamicGrip.esp 0x815, DG skips NPCs carrying it
+    } g_int;
+
+    struct Forms
+    {
+        RE::TESGlobal *enabled{}, *group{}, *counter{}, *gear{}, *lastStand{}, *skipUnique{}, *skipFollower{}, *skipEssential{}, *skipFriendly{};
+        RE::TESFaction *currentFollower{}, *potentialFollower{};
+    } g_forms;
+
+    // All state below is touched on the game thread only (events are re-posted through the task interface).
+    std::unordered_map<RE::FormID, Tracked> g_tracked;
+    std::unordered_map<RE::FormID, Legacy> g_pending;     // restores read from the co-save, not yet applied
+    std::unordered_set<RE::FormID> g_gripBlocked;         // NPC bases we put the Dynamic Grip blacklist on (foreign ones are never removed)
+    std::unordered_set<RE::FormID> g_masterBases;         // bases that hold a For Honor master this session: never unblocked
+    std::atomic<std::uint32_t> g_generation{ 0 };
+    std::atomic<std::size_t> g_trackedCount{ 0 };
+    std::atomic<bool> g_ready{ false };
+    Clock::time_point g_lastSweep{};
+
+    struct FactionRule { RE::FormID id; Doctrine doctrine; int priority; };
+    // Vanilla Skyrim.esm factions, FormIDs verified against the installed master.
+    constexpr FactionRule kRules[] = {
+        { 0x2430D, Doctrine::Undead, 9 },   // DraugrFaction
+        { 0x43597, Doctrine::Daedra, 9 },   // DremoraFaction
+        { 0x26724, Doctrine::Caster, 8 },   // WarlockFaction
+        { 0x34B74, Doctrine::Caster, 8 },   // NecromancerFaction
+        { 0x39F26, Doctrine::Thalmor, 7 },  // ThalmorFaction
+        { 0x27242, Doctrine::Vampire, 6 },  // VampireFaction
+        { 0x43599, Doctrine::Forsworn, 5 }, // ForswornFaction
+        { 0x2BF9A, Doctrine::Military, 4 }, // CWImperialFaction
+        { 0x2BF9B, Doctrine::Military, 4 }, // CWSonsFaction
+        { 0x1C9FC, Doctrine::Military, 4 }, // CWImperialFactionNPC
+        { 0x1C9FD, Doctrine::Military, 4 }, // CWSonsFactionNPC
+        { 0x86EEE, Doctrine::Military, 4 }, // IsGuardFaction
+        { 0x48362, Doctrine::Military, 4 }, // CompanionsFaction
+        { 0x72834, Doctrine::Military, 4 }, // BladesFaction
+        { 0xB3292, Doctrine::Military, 4 }, // VigilantOfStendarrFaction
+        { 0x4E509, Doctrine::Military, 3 }, // HunterFaction
+        { 0x1BCC0, Doctrine::Bandit, 3 },   // BanditFaction
+        { 0xAA0A4, Doctrine::Bandit, 3 },   // SilverHandFaction
+    };
+    constexpr RE::FormID kBossStyle1H = 0x3DECE;  // csHumanBoss1H
+    constexpr RE::FormID kBossStyle2H = 0x3DECF;  // csHumanBoss2H
+    constexpr std::string_view kTitles[] = { "Boss", "Chief", "Champion", "Warlord", "Commander", "General", "Jarl",
+        "Captain", "Master", "Veteran", "Thane", "Lord", "King", "Queen", "Leader" };
+
+    void SetupLog()
+    {
+        auto dir = SKSE::log::log_directory();
+        if (!dir) return;
+        *dir /= "NemesisCombatAI.log";
+        auto logger = std::make_shared<spdlog::logger>("ncai", std::make_shared<spdlog::sinks::basic_file_sink_mt>(dir->string(), true));
+        logger->set_level(spdlog::level::info);
+        logger->flush_on(spdlog::level::info);
+        spdlog::set_default_logger(std::move(logger));
+        spdlog::set_pattern("%H:%M:%S.%e [%l] %v");
+    }
+
+    std::string Lower(std::string text)
+    {
+        std::ranges::transform(text, text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return text;
+    }
+
+    std::string Trim(std::string_view text)
+    {
+        const auto first = text.find_first_not_of(" \t\r");
+        if (first == std::string_view::npos) return {};
+        return std::string{ text.substr(first, text.find_last_not_of(" \t\r") - first + 1) };
+    }
+
+    void ReadConfig()
+    {
+        namespace fs = std::filesystem;
+        const fs::path dir{ "Data/SKSE/Plugins/NemesisCombatAI.d" };
+        std::error_code ec;
+        std::vector<fs::path> files;
+        for (const auto& entry : fs::directory_iterator(dir, ec)) {
+            if (entry.is_regular_file(ec) && Lower(entry.path().extension().string()) == ".ini") files.push_back(entry.path());
+        }
+        std::ranges::sort(files);
+        if (files.empty()) spdlog::info("config: no ini files in {} (defaults apply)", dir.string());
+        for (const auto& file : files) {
+            std::ifstream in{ file };
+            std::string line;
+            while (std::getline(in, line)) {
+                const auto eq = line.find('=');
+                if (eq == std::string::npos || line.starts_with(';') || line.starts_with('#')) continue;
+                const std::string key = Lower(Trim(std::string_view{ line }.substr(0, eq)));
+                const std::string value = Trim(std::string_view{ line }.substr(eq + 1));
+                const bool on = value == "1" || Lower(value) == "true";
+                if (key == "castertiers") {
+                    g_cfg.casterTiers = on;
+                } else if (key == "griptiers") {
+                    g_cfg.gripTiers = on;
+                } else if (key == "casterstyle") {
+                    const auto bar = value.find('|');
+                    const auto id = bar == std::string::npos ? 0UL : std::strtoul(value.c_str() + bar + 1, nullptr, 16);
+                    if (id != 0) {
+                        g_cfg.extraCasterStyles.emplace_back(Trim(std::string_view{ value }.substr(0, bar)), static_cast<RE::FormID>(id));
+                    } else {
+                        spdlog::warn("{}: ignoring CasterStyle '{}' (expected Plugin.esp|HexFormID)", file.filename().string(), value);
+                    }
+                }
+            }
+            spdlog::info("config: read {}", file.filename().string());
+        }
+        spdlog::info("config: casterTiers={} gripTiers={} extraCasterStyles={}", g_cfg.casterTiers, g_cfg.gripTiers, g_cfg.extraCasterStyles.size());
+    }
+
+    float Value(const RE::TESGlobal* g, float fallback)
+    {
+        return g && std::isfinite(g->value) ? g->value : fallback;
+    }
+
+    Settings ReadSettings()
+    {
+        const auto on = [](const RE::TESGlobal* g, bool d) { return Value(g, d ? 1.0F : 0.0F) > 0.5F; };
+        return { on(g_forms.enabled, true), on(g_forms.group, true), on(g_forms.counter, true), on(g_forms.gear, true),
+            on(g_forms.lastStand, true), on(g_forms.skipUnique, true), on(g_forms.skipFollower, true),
+            on(g_forms.skipEssential, true), on(g_forms.skipFriendly, true) };
+    }
+
+    RE::Actor* ActorById(RE::FormID id)
+    {
+        return RE::TESForm::LookupByID<RE::Actor>(id);
+    }
+
+    // Who the actor is: doctrine and rank from factions, titles from its name and combat style, skill and gear from stats.
+    Profile BuildProfile(RE::Actor* actor, bool useGear)
+    {
+        Profile p;
+        p.level = actor->GetLevel();
+        const auto av = actor->AsActorValueOwner();
+        for (auto skill : { RE::ActorValue::kOneHanded, RE::ActorValue::kTwoHanded, RE::ActorValue::kArchery,
+                 RE::ActorValue::kBlock, RE::ActorValue::kDestruction, RE::ActorValue::kConjuration }) {
+            p.skill = std::max(p.skill, av->GetActorValue(skill));
+        }
+        if (useGear) p.gear = std::clamp(av->GetActorValue(RE::ActorValue::kDamageResist) / 120.0F, 0.0F, 1.0F);
+
+        int best = -1;
+        actor->VisitFactions([&](RE::TESFaction* faction, std::int8_t rank) {
+            if (!faction) return false;
+            for (const auto& rule : kRules) {
+                if (faction->GetFormID() == rule.id && rule.priority > best) {
+                    best = rule.priority;
+                    p.doctrine = rule.doctrine;
+                    p.rank = static_cast<float>(std::max<int>(rank, 0));
+                }
+            }
+            return false;
+        });
+
+        p.master = g_int.masterPerk && actor->HasPerk(g_int.masterPerk);
+        if (const auto base = actor->GetActorBase()) {
+            p.unique = base->IsUnique();
+            if (const auto style = base->GetCombatStyle()) {
+                p.boss = style->GetFormID() == kBossStyle1H || style->GetFormID() == kBossStyle2H;
+            }
+        }
+        if (const char* name = actor->GetName()) {
+            const std::string_view view{ name };
+            p.titled = std::ranges::any_of(kTitles, [&](std::string_view t) { return view.find(t) != std::string_view::npos; });
+        }
+        return p;
+    }
+
+    // Race keywords decide who is a person (Dynamic Grip itself only targets ActorTypeNPC) and who is an animal.
+    bool RaceHas(const RE::TESNPC* npc, std::string_view keyword)
+    {
+        return npc && npc->race && npc->race->HasKeywordString(keyword);
+    }
+
+    bool IsPlayerSide(RE::Actor* actor)
+    {
+        return actor->IsPlayerTeammate()
+            || (g_forms.currentFollower && actor->IsInFaction(g_forms.currentFollower))
+            || (g_forms.potentialFollower && actor->IsInFaction(g_forms.potentialFollower));
+    }
+
+    bool Eligible(RE::Actor* actor, const Settings& s)
+    {
+        const auto player = RE::PlayerCharacter::GetSingleton();
+        if (!actor || actor == player || actor->IsDead() || actor->IsChild() || !actor->Is3DLoaded()) return false;
+        if (RaceHas(actor->GetActorBase(), "ActorTypeAnimal"sv)) return false;  // animals keep their own nerve
+        if (s.skipFollower && IsPlayerSide(actor)) return false;
+        if (s.skipEssential && actor->IsEssential()) return false;
+        if (s.skipUnique) {
+            const auto base = actor->GetActorBase();
+            if (base && base->IsUnique()) return false;
+        }
+        if (s.skipFriendly && player && !actor->IsHostileToActor(player)) return false;  // only enemies of the player
+        return true;
+    }
+
+    float HealthFraction(RE::Actor* actor)
+    {
+        const auto av = actor->AsActorValueOwner();
+        const float max = av->GetPermanentActorValue(RE::ActorValue::kHealth);
+        return max > 1.0F ? std::clamp(av->GetActorValue(RE::ActorValue::kHealth) / max, 0.0F, 1.0F) : 1.0F;
+    }
+
+    void ApplyDelta(RE::Actor* actor, const Legacy& d)
+    {
+        const auto av = actor->AsActorValueOwner();
+        const auto add = [&](RE::ActorValue which, float delta) {
+            if (delta != 0.0F) av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kPermanent, which, delta);
+        };
+        add(RE::ActorValue::kAggression, d.aggression);
+        add(RE::ActorValue::kConfidence, d.confidence);
+        add(RE::ActorValue::kAttackDamageMult, d.attack);
+        add(RE::ActorValue::kSpeedMult, d.speed);
+    }
+
+    void Release(RE::FormID id, RE::Actor* actor, Tracked& t)
+    {
+        if (actor && t.applied != 0.0F) {
+            ApplyDelta(actor, { 0.0F, -t.applied, 0.0F, 0.0F });
+            spdlog::debug("{:08X} released ({:+.2f})", id, -t.applied);
+        }
+        t.applied = 0.0F;
+    }
+
+    void DropTracked(std::unordered_map<RE::FormID, Tracked>::iterator it)
+    {
+        Release(it->first, ActorById(it->first), it->second);
+        g_tracked.erase(it);
+        g_trackedCount.store(g_tracked.size(), std::memory_order_relaxed);
+    }
+
+    // Dynamic Grip skips every NPC whose base carries its blacklist keyword. Same technique SPID uses to hand out
+    // keywords; only keywords we added ourselves are ever taken off again.
+    void SetGripBlock(RE::Actor* actor, bool block, std::string_view why, bool master = false)
+    {
+        const auto base = actor->GetActorBase();
+        if (!g_int.gripBlock || !base || !RaceHas(base, "ActorTypeNPC"sv)) return;  // DG's own spell only goes to ActorTypeNPC
+        if (master) g_masterBases.insert(base->GetFormID());
+        else if (!block && g_masterBases.contains(base->GetFormID())) return;  // another actor of this base is a master
+        auto* keywords = static_cast<RE::BGSKeywordForm*>(base);
+        const bool has = keywords->HasKeyword(g_int.gripBlock);
+        if (block && !has) {
+            if (keywords->AddKeyword(g_int.gripBlock)) {
+                g_gripBlocked.insert(base->GetFormID());
+                spdlog::info("grip: {:08X} ({}) excluded from Dynamic Grip: {}", actor->GetFormID(), actor->GetName(), why);
+            }
+        } else if (!block && has && g_gripBlocked.erase(base->GetFormID()) > 0) {
+            keywords->RemoveKeyword(g_int.gripBlock);
+        }
+    }
+
+    // For Honor wins: a weapon master keeps For Honor's movesets, so Dynamic Grip must never re-grip it. Runs for
+    // every fighter that enters combat, before any eligibility filter (named uniques and followers included).
+    void GuardMaster(RE::Actor* actor)
+    {
+        if (actor && !actor->IsPlayerRef() && g_int.masterPerk && g_int.gripBlock && actor->HasPerk(g_int.masterPerk)) SetGripBlock(actor, true, "For Honor master", true);  // never the player
+    }
+
+    // Friends and foes in range, plus whether a clearly more capable friend stands nearby.
+    void Scan(RE::Actor* me, float myIntellect, bool useGear, Situation& s)
+    {
+        const auto lists = RE::ProcessLists::GetSingleton();
+        const auto player = RE::PlayerCharacter::GetSingleton();
+        if (!lists) return;
+        const auto here = me->GetPosition();
+        unsigned checkedLeaders = 0;
+        for (auto& handle : lists->highActorHandles) {
+            const auto other = handle.get();
+            if (!other || other.get() == me || other->IsDead() || !other->IsInCombat()) continue;
+            if (here.GetSquaredDistance(other->GetPosition()) > kRadiusSq) continue;
+            if (me->IsHostileToActor(other.get())) {
+                ++s.foes;
+            } else {
+                ++s.allies;
+                if (!s.leaderNear && checkedLeaders++ < 12) {
+                    const float theirs = Intellect(BuildProfile(other.get(), useGear));
+                    s.leaderNear = TierOf(theirs) >= Tier::Veteran && theirs > myIntellect + 0.15F;
+                }
+            }
+        }
+        if (player && player->IsInCombat() && me->IsHostileToActor(player) && here.GetSquaredDistance(player->GetPosition()) <= kRadiusSq) {
+            ++s.foes;
+        }
+    }
+
+    void Evaluate(RE::FormID id, RE::Actor* actor, Tracked& t, const Settings& s)
+    {
+        const Profile profile = BuildProfile(actor, s.gear);
+        Situation sit;
+        sit.health = HealthFraction(actor);
+        sit.groupAware = s.group;
+        sit.situational = s.situational;
+        sit.lastStand = s.lastStand;
+        sit.lastStandActive = t.lastStand;
+        sit.foes = 0;
+        Scan(actor, Intellect(profile), s.gear, sit);
+        sit.foes = std::max(sit.foes, 1U);
+
+        const auto now = Clock::now();
+        std::erase_if(t.casualties, [&](auto when) { return now - when > kCasualtyWindow; });
+        sit.casualties = static_cast<unsigned>(t.casualties.size());
+        sit.leaderDown = now < t.leaderDownUntil;
+
+        if (const auto target = actor->GetActorRuntimeData().currentCombatTarget.get()) {
+            sit.foeLevel = target->GetLevel();
+            if (const auto weapon = target->GetEquippedObject(false); weapon && weapon->IsWeapon()) {
+                const auto w = weapon->As<RE::TESObjectWEAP>();
+                sit.foeRanged = w && (w->IsBow() || w->IsCrossbow() || w->IsStaff());
+            }
+        }
+
+        const Mind mind = Think(profile, sit);
+        if (g_cfg.gripTiers) {
+            SetGripBlock(actor, !GripSchooled(mind.tier, profile.doctrine, profile.master),
+                std::format("tier {} intellect {:.2f}", static_cast<int>(mind.tier), mind.intellect));
+        }
+        t.lastStand = mind.lastStand;
+        t.next = now + kEvalCooldown;
+
+        // Authored Confidence is the baseline; keep the final value inside the engine's 0..4 scale.
+        const float base = actor->AsActorValueOwner()->GetActorValue(RE::ActorValue::kConfidence) - t.applied;
+        const float wanted = std::clamp(base + mind.confidenceShift, 0.0F, 4.0F) - base;
+        if (std::fabs(wanted - t.applied) >= 0.5F || (wanted == 0.0F && t.applied != 0.0F)) {
+            ApplyDelta(actor, { 0.0F, wanted - t.applied, 0.0F, 0.0F });
+            // The first verdicts of a session go to the info log as test evidence; later ones stay at debug.
+            static std::atomic<int> logged{ 0 };
+            spdlog::log(logged++ < 25 ? spdlog::level::info : spdlog::level::debug,
+                "{:08X} tier={} intellect={:.2f} allies={} foes={} casualties={} shift {:+.2f} -> {:+.2f}", id,
+                static_cast<int>(mind.tier), mind.intellect, sit.allies, sit.foes, sit.casualties, t.applied, wanted);
+            t.applied = wanted;
+        }
+    }
+
+    // Opportunistic cleanup instead of polling: runs from event handlers at most every few seconds.
+    void Sweep(const Settings& s, bool force = false)
+    {
+        const auto now = Clock::now();
+        if (!force && now - g_lastSweep < kSweepInterval) return;
+        g_lastSweep = now;
+
+        for (auto it = g_tracked.begin(); it != g_tracked.end();) {
+            const auto actor = ActorById(it->first);
+            const bool done = !s.enabled || !actor || actor->IsDead() || !actor->IsInCombat() || !actor->Is3DLoaded();
+            if (done) {
+                const auto next = std::next(it);
+                DropTracked(it);
+                it = next;
+            } else {
+                ++it;
+            }
+        }
+
+        for (auto it = g_pending.begin(); it != g_pending.end();) {
+            if (const auto actor = ActorById(it->first)) {
+                ApplyDelta(actor, { -it->second.aggression, -it->second.confidence, -it->second.attack, -it->second.speed });
+                spdlog::info("co-save: restored legacy deltas on {:08X}", it->first);
+                it = g_pending.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void Admit(RE::FormID id, const Settings& s)
+    {
+        const auto actor = ActorById(id);
+        if (actor && actor->IsInCombat()) GuardMaster(actor);
+        if (g_tracked.contains(id) || g_tracked.size() >= kMaxTracked) return;
+        if (!Eligible(actor, s) || !actor->IsInCombat()) return;
+        auto& t = g_tracked[id];
+        g_trackedCount.store(g_tracked.size(), std::memory_order_relaxed);
+        Evaluate(id, actor, t, s);
+    }
+
+    void OnDeath(RE::FormID dyingId, const Settings& s)
+    {
+        const auto dying = ActorById(dyingId);
+        if (!dying) return;
+        const Profile dyingProfile = BuildProfile(dying, s.gear);
+        const float dyingIntellect = Intellect(dyingProfile);
+        const auto now = Clock::now();
+        for (auto& [id, t] : g_tracked) {
+            const auto actor = ActorById(id);
+            if (!actor || id == dyingId || actor->IsDead() || dying->IsHostileToActor(actor)) continue;
+            if (actor->GetPosition().GetSquaredDistance(dying->GetPosition()) > kRadiusSq) continue;
+            t.casualties.push_back(now);
+            if (t.casualties.size() > 8) t.casualties.erase(t.casualties.begin());
+            const float mine = Intellect(BuildProfile(actor, s.gear));
+            if (TierOf(dyingIntellect) >= Tier::Veteran && dyingIntellect > mine + 0.15F) t.leaderDownUntil = now + kCasualtyWindow;
+            Evaluate(id, actor, t, s);
+        }
+        if (const auto it = g_tracked.find(dyingId); it != g_tracked.end()) DropTracked(it);
+    }
+
+    template <class F>
+    void Post(F&& work)
+    {
+        const auto gen = g_generation.load();
+        SKSE::GetTaskInterface()->AddTask([gen, work = std::forward<F>(work)] {
+            if (gen != g_generation.load()) return;  // world changed since the event fired
+            const Settings s = ReadSettings();
+            work(s);
+            Sweep(s);
+        });
+    }
+
+    void ScanCombatants()
+    {
+        Post([](const Settings& s) {
+            if (!s.enabled) return;
+            if (const auto lists = RE::ProcessLists::GetSingleton()) {
+                for (auto& handle : lists->highActorHandles) {
+                    if (const auto actor = handle.get(); actor && actor->IsInCombat()) Admit(actor->GetFormID(), s);
+                }
+            }
+        });
+    }
+
+    class Sink final :
+        public RE::BSTEventSink<RE::TESCombatEvent>,
+        public RE::BSTEventSink<RE::TESDeathEvent>,
+        public RE::BSTEventSink<RE::TESHitEvent>
+    {
+    public:
+        RE::BSEventNotifyControl ProcessEvent(const RE::TESCombatEvent* e, RE::BSTEventSource<RE::TESCombatEvent>*) override
+        {
+            if (!g_ready || !e || !e->actor) return RE::BSEventNotifyControl::kContinue;
+            const auto id = e->actor->GetFormID();
+            const bool fighting = e->newState.get() == RE::ACTOR_COMBAT_STATE::kCombat;
+            Post([id, fighting](const Settings& s) {
+                if (fighting) {
+                    if (s.enabled) {
+                        Admit(id, s);
+                    } else if (const auto actor = ActorById(id)) {
+                        GuardMaster(actor);
+                    }
+                } else if (const auto it = g_tracked.find(id); it != g_tracked.end()) {
+                    DropTracked(it);
+                }
+            });
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        RE::BSEventNotifyControl ProcessEvent(const RE::TESDeathEvent* e, RE::BSTEventSource<RE::TESDeathEvent>*) override
+        {
+            if (!g_ready || !e || !e->dead || !e->actorDying || g_trackedCount.load(std::memory_order_relaxed) == 0) {
+                return RE::BSEventNotifyControl::kContinue;
+            }
+            const auto id = e->actorDying->GetFormID();
+            Post([id](const Settings& s) { if (s.enabled && s.group) OnDeath(id, s); });
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        RE::BSEventNotifyControl ProcessEvent(const RE::TESHitEvent* e, RE::BSTEventSource<RE::TESHitEvent>*) override
+        {
+            if (!g_ready || !e || !e->target || g_trackedCount.load(std::memory_order_relaxed) == 0) {
+                return RE::BSEventNotifyControl::kContinue;
+            }
+            const auto id = e->target->GetFormID();
+            Post([id](const Settings& s) {
+                const auto it = g_tracked.find(id);
+                if (it == g_tracked.end() || Clock::now() < it->second.next) return;
+                if (const auto actor = ActorById(id)) Evaluate(id, actor, it->second, s);
+            });
+            return RE::BSEventNotifyControl::kContinue;
+        }
+    } g_sink;
+
+    RE::TESGlobal* Global(RE::TESDataHandler* data, RE::FormID local, std::string_view name)
+    {
+        const auto form = data->LookupForm<RE::TESGlobal>(local, "NemesisCombatAI.esp");
+        if (!form) spdlog::error("global {} (0x{:X}) not found - is NemesisCombatAI.esp enabled?", name, local);
+        return form;
+    }
+
+    bool ResolveForms()
+    {
+        const auto data = RE::TESDataHandler::GetSingleton();
+        if (!data) return false;
+        g_forms.enabled = Global(data, 0x815, "Nemesis_Enabled");
+        g_forms.group = Global(data, 0x816, "Nemesis_GroupTactics");
+        g_forms.counter = Global(data, 0x817, "Nemesis_CounterTactics");
+        g_forms.gear = Global(data, 0x818, "Nemesis_EquipmentThreat");
+        g_forms.lastStand = Global(data, 0x823, "Nemesis_BerserkMode");
+        g_forms.skipUnique = Global(data, 0x824, "Nemesis_SkipUniques");
+        g_forms.skipFollower = Global(data, 0x825, "Nemesis_SkipFollowers");
+        g_forms.skipEssential = Global(data, 0x826, "Nemesis_SkipEssential");
+        g_forms.skipFriendly = Global(data, 0x827, "Nemesis_SkipFriendly");
+        g_forms.currentFollower = RE::TESForm::LookupByID<RE::TESFaction>(0x5C84E);
+        g_forms.potentialFollower = RE::TESForm::LookupByID<RE::TESFaction>(0x5C84D);
+        g_int.masterPerk = data->LookupForm<RE::BGSPerk>(0xD7B, "ForHonorBFCO.esp");
+        g_int.gripBlock = data->LookupForm<RE::BGSKeyword>(0x815, "DynamicGrip.esp");
+        spdlog::info("integrations: For Honor master perk {}, Dynamic Grip blacklist {}", g_int.masterPerk ? "found" : "absent",
+            g_int.gripBlock ? "found" : "absent");
+        return g_forms.enabled != nullptr;  // without the master toggle the layer stays off
+    }
+
+    // ---- caster styles: vanilla mage styles carry no grade, so grade them by the caster's own level ----
+
+    bool PlayerSideBase(const RE::TESNPC* npc)
+    {
+        return std::ranges::any_of(npc->factions, [](const RE::FACTION_RANK& f) {
+            return f.faction && (f.faction == g_forms.potentialFollower || f.faction == g_forms.currentFollower);
+        });
+    }
+
+    Profile BaseProfile(const RE::TESNPC* npc)
+    {
+        Profile p;
+        // Fixed level, or the middle of the range a player-level NPC scales through.
+        if (npc->HasPCLevelMult()) {
+            const float lo = std::max<float>(npc->actorData.calcLevelMin, 1.0F);
+            const float hi = npc->actorData.calcLevelMax > 0 ? npc->actorData.calcLevelMax : lo + 15.0F;
+            p.level = (lo + std::max(hi, lo)) * 0.5F;
+        } else {
+            p.level = npc->actorData.level;
+        }
+        using S = RE::TESNPC::Skills;
+        for (auto skill : { S::kAlteration, S::kConjuration, S::kDestruction, S::kIllusion, S::kRestoration }) {
+            p.skill = std::max(p.skill, static_cast<float>(npc->playerSkills.values[skill]));
+        }
+        p.doctrine = Doctrine::Caster;
+        p.unique = npc->IsUnique();
+        if (const char* name = npc->GetName()) {
+            const std::string_view view{ name };
+            p.titled = std::ranges::any_of(kTitles, [&](std::string_view t) { return view.find(t) != std::string_view::npos; });
+        }
+        return p;
+    }
+
+    void GradeCasterStyles(RE::TESDataHandler* data)
+    {
+        static bool done = false;  // base records live for the whole session, one pass is enough
+        if (done) return;
+        done = true;
+        if (!g_cfg.casterTiers) return;
+
+        RE::TESCombatStyle* pools[4][2]{};
+        for (std::size_t tier = 0; tier < 4; ++tier) {
+            for (std::size_t slot = 0; slot < 2; ++slot) {
+                pools[tier][slot] = data->LookupForm<RE::TESCombatStyle>(Styles::kCasterPools[tier][slot], Styles::kPlugin);
+                if (!pools[tier][slot]) {
+                    spdlog::info("caster tiers: {} not installed, vanilla mage styles stay as they are", Styles::kPlugin);
+                    return;
+                }
+            }
+        }
+        std::unordered_set<RE::FormID> sources(std::begin(Styles::kCasterSources), std::end(Styles::kCasterSources));
+        for (const auto& [plugin, local] : g_cfg.extraCasterStyles) {
+            if (const auto style = data->LookupForm<RE::TESCombatStyle>(local, plugin)) sources.insert(style->GetFormID());
+            else spdlog::warn("caster tiers: extra style {}|{:X} not found", plugin, local);
+        }
+
+        const bool skipUnique = Value(g_forms.skipUnique, 1.0F) > 0.5F;
+        unsigned graded[4]{}, skipped = 0;
+        for (auto* npc : data->GetFormArray<RE::TESNPC>()) {
+            if (!npc || !npc->combatStyle || !sources.contains(npc->combatStyle->GetFormID())) continue;
+            // Stats from a template, named uniques (when the brain spares them), followers and non-people (casting
+            // creatures share these styles) keep their authored style.
+            if (!RaceHas(npc, "ActorTypeNPC"sv) || npc->UsesTemplate() || (skipUnique && npc->IsUnique()) || PlayerSideBase(npc)) {
+                ++skipped;
+                continue;
+            }
+            const auto tier = static_cast<std::size_t>(TierOf(Intellect(BaseProfile(npc))));
+            npc->combatStyle = pools[tier][PoolSlot(npc->GetFormID())];
+            ++graded[tier];
+        }
+        spdlog::info("caster tiers: graded rabble={} trained={} veteran={} elite={}, left alone={}", graded[0], graded[1], graded[2], graded[3], skipped);
+    }
+
+    // ---- co-save: outstanding deltas, same record layout as 2.x ----
+
+    void OnSave(SKSE::SerializationInterface* ser)
+    {
+        std::vector<std::byte> blob;
+        const auto put = [&](RE::FormID id, const Legacy& d) {
+            if (blob.size() / kRecordSize >= kMaxPending) return;
+            const float values[4] = { d.aggression, d.confidence, d.attack, d.speed };
+            const std::size_t at = blob.size();
+            blob.resize(at + kRecordSize);
+            std::memcpy(blob.data() + at, &id, sizeof(id));
+            std::memcpy(blob.data() + at + 4, values, sizeof(values));
+        };
+        for (const auto& [id, t] : g_tracked) {
+            if (t.applied != 0.0F) put(id, { 0.0F, t.applied, 0.0F, 0.0F });
+        }
+        for (const auto& [id, d] : g_pending) put(id, d);
+        if (!blob.empty() && !ser->WriteRecord(kCoSaveId, kCoSaveVersion, blob.data(), static_cast<std::uint32_t>(blob.size()))) {
+            spdlog::error("co-save: write failed ({} bytes)", blob.size());
+        }
+    }
+
+    void OnLoad(SKSE::SerializationInterface* ser)
+    {
+        g_pending.clear();
+        std::uint32_t type = 0, version = 0, length = 0;
+        while (ser->GetNextRecordInfo(type, version, length)) {
+            if (type != kCoSaveId || version != kCoSaveVersion) continue;
+            if (length % kRecordSize != 0 || length > kMaxPending * kRecordSize) {
+                spdlog::error("co-save: invalid record length {}", length);
+                continue;
+            }
+            for (std::uint32_t read = 0; read < length; read += kRecordSize) {
+                std::byte raw[kRecordSize];
+                if (ser->ReadRecordData(raw, kRecordSize) != kRecordSize) break;
+                RE::FormID old{};
+                float v[4];
+                std::memcpy(&old, raw, 4);
+                std::memcpy(v, raw + 4, sizeof(v));
+                if (!std::ranges::all_of(v, [](float f) { return std::isfinite(f) && std::fabs(f) <= 1000.0F; })) {
+                    spdlog::warn("co-save: invalid delta for {:08X}", old);
+                    continue;
+                }
+                RE::FormID resolved{};
+                if (ser->ResolveFormID(old, resolved)) g_pending[resolved] = { v[0], v[1], v[2], v[3] };
+            }
+        }
+        spdlog::info("co-save: {} pending delta record(s) recovered", g_pending.size());
+    }
+
+    void OnRevert(SKSE::SerializationInterface*)
+    {
+        ++g_generation;
+        g_tracked.clear();
+        g_pending.clear();
+        g_trackedCount.store(0);
+    }
+
+    void OnMessage(SKSE::MessagingInterface::Message* msg)
+    {
+        switch (msg->type) {
+        case SKSE::MessagingInterface::kDataLoaded:
+            ReadConfig();
+            if (!ResolveForms()) {
+                spdlog::error("master toggle missing - runtime layer disabled");
+                return;
+            }
+            RE::ScriptEventSourceHolder::GetSingleton()->AddEventSink<RE::TESCombatEvent>(&g_sink);
+            RE::ScriptEventSourceHolder::GetSingleton()->AddEventSink<RE::TESDeathEvent>(&g_sink);
+            RE::ScriptEventSourceHolder::GetSingleton()->AddEventSink<RE::TESHitEvent>(&g_sink);
+            g_ready = true;
+            spdlog::info("ready: combat, death and hit sinks registered");
+            {
+                const auto data = RE::TESDataHandler::GetSingleton();
+                spdlog::info("tiered combat styles plugin: {}", data->LookupModByName("NemesisCombatAI_Styles.esp") ? "active" : "not installed");
+                if (data->LookupModByName("SkyTactics - Dynamic Combat Styles.esp")) {
+                    spdlog::warn("SkyTactics is active: Nemesis tiered styles replace it, disable SkyTactics' plugin to avoid two systems fighting over combat styles");
+                }
+            }
+            break;
+        case SKSE::MessagingInterface::kPostLoadGame:
+        case SKSE::MessagingInterface::kNewGame:
+            if (g_ready) {
+                GradeCasterStyles(RE::TESDataHandler::GetSingleton());  // after every plugin's data-loaded work, so SkyPatcher has finished
+                ScanCombatants();  // Post() also drains restores read from the co-save
+            }
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+SKSEPluginLoad(const SKSE::LoadInterface* skse)
+{
+    SKSE::Init(skse);
+    SetupLog();
+    spdlog::info("NemesisCombatAI 3.0.0 loading, game {}", REL::Module::get().version().string("."));
+
+    const auto ser = SKSE::GetSerializationInterface();
+    ser->SetUniqueID(kCoSaveId);
+    ser->SetSaveCallback(OnSave);
+    ser->SetLoadCallback(OnLoad);
+    ser->SetRevertCallback(OnRevert);
+    SKSE::GetMessagingInterface()->RegisterListener(OnMessage);
+    return true;
+}

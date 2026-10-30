@@ -1,0 +1,49 @@
+Nemesis Combat AI 3.0.0
+
+Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
+Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
+spells, NFF owns follower commands.
+
+REQUIREMENTS
+  Hard:     SKSE64, Address Library for SKSE Plugins, Microsoft Visual C++ x64 runtime. VR is not supported.
+  For the tiered combat styles: SkyPatcher.   For the in-game menu: SkyUI + MCM Helper.
+  Optional: Dynamic Grip, For Honor In Skyrim BFCO (both detected automatically), KID (only tags weapons and
+            armor with keywords that other mods may use; Nemesis itself no longer needs it).
+
+INSTALL / UPDATE
+  Install the archive with your mod manager. The installer detects what you have and tells you on its last
+  page (ticked and locked = found, greyed out = not installed). Replace 2.x; do not mix old and new files.
+  If you used 2.x's "For Honor Hero Gate" overlay, remove it: 3.0 no longer ships it, For Honor chooses its own
+  weapon masters. Delete the old NemesisCombatAI_DynamicGrip_DISTR.ini if a manual install left it behind.
+  Disable "SkyTactics - Dynamic Combat Styles.esp": the tiered styles here replace it.
+
+WHAT IT DOES
+  Nerve and morale (always): every enemy in combat has a mind rating from its level, combat skill, faction rank,
+  leader title and faction doctrine. Rabble panic and rout when friends fall or a leader dies; trained soldiers
+  hold; veterans turn desperate instead of breaking; elites stay composed. Only the engine's own Confidence
+  value moves, and it is put back when the fight ends.
+  Tiered combat styles ("Full tactics" option): 31 styles for human melee, Draugr, archers, Forsworn, bosses and
+  mages. Mages are graded by their own level, from untrained casters that stand and bolt to archmages that kite.
+  For Honor wins: NPCs that For Honor picks as weapon masters are treated as Elite and, when Dynamic Grip is
+  installed, kept out of Dynamic Grip so their For Honor movesets are not replaced.
+  Dynamic Grip option: only Trained-or-better fighters (never casters) switch grips in combat.
+  Animals, followers, teammates, essential actors and named uniques are skipped by default (MCM toggles).
+
+SETTINGS
+  In game: Mod Configuration Menu > Nemesis Combat AI.
+  Files: Data/SKSE/Plugins/NemesisCombatAI.d/*.ini  (CasterTiers=0/1, GripTiers=0/1, and CasterStyle=Plugin.esp|HexFormID
+  to grade another mod's caster style). Later file names win; add your own file instead of editing the shipped ones.
+
+UNINSTALL
+  Disable the mod. Nothing permanent is written to your save except an outstanding Confidence amount, which the
+  next load removes. Combat styles and keywords are applied in memory each session.
+
+TROUBLESHOOTING
+  Log: Documents\My Games\Skyrim Special Edition\SKSE\NemesisCombatAI.log. It shows the version, settings read,
+  integrations found, how many casters were graded, and the first verdicts of a session. When reporting a
+  problem, include that file and your SKSE log (skse64.log).
+
+TESTING STATUS
+  Built from source, host-tested and tool-validated. A real-world play session confirmed loading, integrations
+  and caster grading without errors. Long sessions, huge battles and every mod combination are untested; report
+  anything odd.

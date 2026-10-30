@@ -1,0 +1,6 @@
+# Keep every byte as committed: the release archive is built from these files and its hash must not depend on
+# the checking-out machine's line-ending settings.
+* -text
+*.esp binary
+*.pex binary
+*.seq binary

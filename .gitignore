@@ -1,0 +1,11 @@
+build/
+out/
+*.dll
+*.pdb
+*.obj
+*.lib
+*.exp
+*.log
+__pycache__/
+*.pyc
+*.zip
