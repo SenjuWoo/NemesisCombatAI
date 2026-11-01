@@ -7,8 +7,9 @@
 # Nemesis Combat AI
 
 <p>
-  <a href="https://github.com/SenjuWoo/NemesisCombatAI/releases/latest"><img src="https://img.shields.io/github/v/release/SenjuWoo/NemesisCombatAI?label=release&color=8C3A32&labelColor=0d1117" alt="latest release"></a>
+  <a href="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml"><img src="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8C3A32?labelColor=0d1117" alt="MIT License"></a>
+  <a href="https://github.com/SenjuWoo/NemesisCombatAI/releases/latest"><img src="https://img.shields.io/github/v/release/SenjuWoo/NemesisCombatAI?label=release&color=8C3A32&labelColor=0d1117" alt="latest release"></a>
 </p>
 
 </div>
