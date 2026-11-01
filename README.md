@@ -1,4 +1,17 @@
+<p align="center">
+  <img src="assets/mark.svg" width="72" height="72" alt="Nemesis Combat AI">
+</p>
+
+<div align="center">
+
 # Nemesis Combat AI
+
+<p>
+  <a href="https://github.com/SenjuWoo/NemesisCombatAI/releases/latest"><img src="https://img.shields.io/github/v/release/SenjuWoo/NemesisCombatAI?label=release&color=8C3A32&labelColor=0d1117" alt="latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8C3A32?labelColor=0d1117" alt="MIT License"></a>
+</p>
+
+</div>
 
 Enemy nerve, morale and tactics for Skyrim Special Edition / Anniversary Edition: a native SKSE plugin plus a pack of tiered combat styles. Enemies get a mind rating from their level, combat skill, faction rank, leader title and faction doctrine, and the fight itself moves their nerve. Low-level enemies are cowardly and dumb, trained soldiers hold, veterans turn desperate instead of breaking, and elites stay composed. Movesets, attacks and animations are never touched: [For Honor In Skyrim BFCO](https://www.nexusmods.com/skyrimspecialedition/mods/185459) owns movesets.
 
