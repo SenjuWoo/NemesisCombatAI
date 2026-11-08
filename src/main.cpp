@@ -296,7 +296,8 @@ namespace
     {
         if (actor && t.applied != 0.0F) {
             ApplyDelta(actor, { 0.0F, -t.applied, 0.0F, 0.0F });
-            spdlog::debug("{:08X} released ({:+.2f})", id, -t.applied);
+            spdlog::debug("{:08X} released ({:+.2f}) av={:.2f}", id, -t.applied,
+                actor ? actor->GetActorValue(RE::ActorValue::kConfidence) : 0.0F);
         }
         t.applied = 0.0F;
     }
@@ -435,9 +436,11 @@ namespace
             ApplyDelta(actor, { 0.0F, wanted - t.applied, 0.0F, 0.0F });
             // The first verdicts of a session go to the info log as test evidence; later ones stay at debug.
             static std::atomic<int> logged{ 0 };
+            // av/base are the engine's own Confidence numbers, so a report shows the applied value, not just intent.
             spdlog::log(logged++ < 25 ? spdlog::level::info : spdlog::level::debug,
-                "{:08X} tier={} intellect={:.2f} allies={} foes={} casualties={} shift {:+.2f} -> {:+.2f}", id,
-                static_cast<int>(mind.tier), mind.intellect, sit.allies, sit.foes, sit.casualties, t.applied, wanted);
+                "{:08X} tier={} intellect={:.2f} allies={} foes={} casualties={} shift {:+.2f} -> {:+.2f} av={:.2f} base={:.2f}", id,
+                static_cast<int>(mind.tier), mind.intellect, sit.allies, sit.foes, sit.casualties, t.applied, wanted,
+                actor->GetActorValue(RE::ActorValue::kConfidence), base);
             t.applied = wanted;
         }
     }
