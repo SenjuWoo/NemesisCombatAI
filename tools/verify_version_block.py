@@ -13,7 +13,7 @@ import sys
 ADDRESS_LIBRARY_POST_AE = 1 << 0   # versionIndependence: plugin resolves IDs through the address library
 STRUCTS_POST_629 = 1 << 2          # versionIndependence: plugin uses the post-1.6.629 structure layout
 NO_STRUCT_USE = 1 << 0             # versionIndependenceEx: plugin claims it touches no engine structures
-ADDRESS_LIBRARY_V5 = 1 << 1        # versionIndependenceEx: reader understands the 1.7.x (format 5) library
+ADDRESS_LIBRARY_V5 = 1 << 1        # versionIndependenceEx: declares v5 (1.7.x) support; formats 1-2 stay readable
 
 
 def sections(data):
