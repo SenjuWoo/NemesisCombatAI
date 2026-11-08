@@ -11,7 +11,8 @@ import struct
 import sys
 
 ADDRESS_LIBRARY_POST_AE = 1 << 0   # versionIndependence: plugin resolves IDs through the address library
-NO_STRUCT_USE = 1 << 0             # versionIndependenceEx: no engine struct layout is touched
+STRUCTS_POST_629 = 1 << 2          # versionIndependence: plugin uses the post-1.6.629 structure layout
+NO_STRUCT_USE = 1 << 0             # versionIndependenceEx: plugin claims it touches no engine structures
 ADDRESS_LIBRARY_V5 = 1 << 1        # versionIndependenceEx: reader understands the 1.7.x (format 5) library
 
 
@@ -94,7 +95,8 @@ def main():
         ("author", author == "GennyWoo"),
         ("address library independence set", bool(independence & ADDRESS_LIBRARY_POST_AE)),
         ("AddressLibraryV5 set (1.7.x library)", bool(ex & ADDRESS_LIBRARY_V5)),
-        ("no struct use set", bool(ex & NO_STRUCT_USE)),
+        ("layout-dependent flag set (post-1.6.629 structs)", bool(independence & STRUCTS_POST_629)),
+        ("NoStructUse clear (this plugin reads/writes engine structs)", not (ex & NO_STRUCT_USE)),
     ]
     if expect:
         checks.append((f"version {expect}", f"{major}.{minor}.{patch}" == expect))

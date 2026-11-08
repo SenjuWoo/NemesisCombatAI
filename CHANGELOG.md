@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.2
+
+- Corrected the SKSE version-independence declaration. The plugin reads and writes engine structures (`Actor::currentCombatTarget`, `TESNPC::combatStyle` and its level data, `TESGlobal::value`, `ProcessLists::highActorHandles`), so it now declares the post-1.6.629 layout instead of claiming `NoStructUse`. Same code paths, same behaviour; the loader sees an accurate declaration.
+- Skyrim SE 1.5.97 is refused at load (one log line) instead of running against the pre-1.6.629 structure layout. Supported builds are AE 1.6.629 through 1.7.104.
+- Not a behaviour change: records, FormIDs, settings, MCM ids and the `NMSI` v1 co-save are untouched. 3.0.1 stays available for rollback.
+
 ## 3.0.1
 
 - Addresses the startup failure `REL/ID.h(219): failed to open address library file` that 3.0.0 caused on Skyrim 1.7.104 (reported by several users right after release). Verification on 1.7.104 is still pending: the fix is build-validated (version block and format-5 reader present in the binary) and the DLL is load-tested on 1.6.1170.

@@ -14,4 +14,4 @@
 
 **To undo everything:** disable the mod. Combat styles and keywords are not saved in your game. Any Confidence still applied at the moment you save and quit is removed the next time that save is loaded.
 
-Built and tool-checked. Gameplay was played on 3.0.0; the 3.0.1 DLL was load-tested on Skyrim 1.6.1170 and has not been played, nor run on 1.7.x yet. Long-session, large-battle and mod-interaction testing is still open: report problems with `NemesisCombatAI.log` from `Documents\My Games\Skyrim Special Edition\SKSE`.
+Built and tool-checked. Gameplay was played on 3.0.0; the 3.0.1 DLL was load-tested on Skyrim 1.6.1170 (3.0.2 changes only the version declaration and adds a Skyrim SE 1.5.97 refusal) and has not been played, nor run on 1.7.x yet. Long-session, large-battle and mod-interaction testing is still open: report problems with `NemesisCombatAI.log` from `Documents\My Games\Skyrim Special Edition\SKSE`.

@@ -28,7 +28,7 @@ The mod is distributed on [Nexus Mods](https://www.nexusmods.com/skyrimspecialed
 
 ## Requirements
 
-SKSE64 and the Address Library for SKSE Plugins, both matching your game build: Skyrim SE 1.5.97, AE 1.6.x and AE 1.7.99/1.7.104 all work with the same DLL, and 1.7.99/1.7.104 need Address Library All-in-One v13 or newer. The plugin links the C runtime statically, so the Visual C++ redistributable is not required. SkyPatcher is needed for the tiered styles, SkyUI and MCM Helper for the menu. Dynamic Grip, For Honor In Skyrim BFCO and NPC Spell Variance are optional and detected automatically. Skyrim SE/AE only; VR is not supported.
+SKSE64 and the Address Library for SKSE Plugins, both matching your game build. One DLL serves Skyrim AE 1.6.629 or newer (1.6.x, 1.7.99, 1.7.104); 1.7.99/1.7.104 need Address Library All-in-One v13 or newer, 1.6.x uses v11. Skyrim SE 1.5.97 uses the older structure layout and the plugin refuses to load on it. The plugin links the C runtime statically, so the Visual C++ redistributable is not required. SkyPatcher is needed for the tiered styles, SkyUI and MCM Helper for the menu. Dynamic Grip, For Honor In Skyrim BFCO and NPC Spell Variance are optional and detected automatically. Skyrim SE/AE only; VR is not supported.
 
 ## Settings
 
@@ -42,7 +42,7 @@ In game: Mod Configuration Menu, Nemesis Combat AI. Files: `Data/SKSE/Plugins/Ne
 | `tests/` | Host tests of the policy (no Skyrim needed). |
 | `tools/` | `make_styles_esp.py` generates the styles plugin, its SkyPatcher INI and `StyleIds.h` from one table; `check_package.py` verifies them; `make_release_zip.py` builds the release archive; `verify_version_block.py` reads the SKSE version block out of a built DLL (the Address Library contract). |
 | `package/` | Everything that ships except the DLL: plugins, MCM config, scripts, INIs, FOMOD, licences. |
-| `extern/commonlibsse` | CommonLibSSE (libxse fork), pinned by submodule; it covers game builds 1.5.97 through 1.7.104 and reads Address Library formats 1-2 and 5. |
+| `extern/commonlibsse` | CommonLibSSE (libxse fork), pinned by submodule; it covers game builds 1.5.97 through 1.7.104 and reads Address Library formats 1-2 and 5. This plugin refuses 1.5.97 because it is compiled against the post-1.6.629 structure layout. |
 
 ## Building
 
@@ -63,7 +63,7 @@ The plugin is linked with the static C runtime, so it does not need the Visual C
 
 ## Status
 
-3.0.1 is a compatibility rebuild of 3.0.0: same plugin behaviour, new build toolchain and a corrected Address Library declaration. Verified so far: builds, host policy tests, package/FOMOD checks, and a real load on Skyrim 1.6.1170 (`skse64.log`: "loaded correctly"; plugin log: "NemesisCombatAI 3.0.1.0 loading, game 1.6.1170.0"). **Not yet run on 1.7.99/1.7.104**, the builds the fix is for - 1.7.x reports (with `skse64.log` and `NemesisCombatAI.log`) are wanted. Gameplay was played on 3.0.0 on 1.6.1170, and 3.0.1 changes no gameplay code. Not confirmed in game: Dynamic Grip honoring the exclusion on For Honor masters in every situation, long sessions, very large battles and every mod combination. Host tests and a successful build do not prove runtime safety. There are no screenshots yet.
+3.0.2 corrects the loader declaration (the plugin does use engine structures, so it no longer claims otherwise) and refuses Skyrim SE 1.5.97; 3.0.1 was the Address Library v5 compatibility rebuild of 3.0.0. In both, plugin behaviour is unchanged. Verified so far: builds, host policy tests, package/FOMOD checks, and a real load on Skyrim 1.6.1170 (`skse64.log`: "loaded correctly"; plugin log: "NemesisCombatAI 3.0.1.0 loading, game 1.6.1170.0"). **Not yet run on 1.7.99/1.7.104**, the builds the fix is for - 1.7.x reports (with `skse64.log` and `NemesisCombatAI.log`) are wanted. Gameplay was played on 3.0.0 on 1.6.1170, and 3.0.1 changes no gameplay code. Not confirmed in game: Dynamic Grip honoring the exclusion on For Honor masters in every situation, long sessions, very large battles and every mod combination. Host tests and a successful build do not prove runtime safety. There are no screenshots yet.
 
 ## Licence and credits
 

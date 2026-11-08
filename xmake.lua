@@ -12,7 +12,7 @@ add_ldflags("/Brepro", { force = true })
 includes("extern/commonlibsse")
 
 set_project("NemesisCombatAI")
-set_version("3.0.1")
+set_version("3.0.2")
 set_license("MIT")
 set_languages("c++23")
 set_warnings("allextra")
@@ -20,15 +20,19 @@ set_arch("x64")
 
 add_rules("mode.releasedbg")
 
--- The mod itself. The commonlibsse.plugin rule generates the SKSE version block from the options below,
--- so the plugin declares Address Library independence (and v5 support) without a hand-written struct.
+-- The mod itself. The commonlibsse.plugin rule generates the SKSE version block from the options below.
+-- address_library: engine IDs come from the Address Library, never from fixed exe offsets.
+-- no_struct_use=false / layout_dependent=true: this plugin DOES read and write engine structures
+-- (Actor::currentCombatTarget, TESNPC::combatStyle and its level data, TESGlobal::value,
+-- ProcessLists::highActorHandles) and is compiled against the post-1.6.629 layout, so it must say so.
+-- 1.5.97 carries the pre-1.6.629 layout and is refused at load in main.cpp instead of writing at wrong offsets.
 target("NemesisCombatAI")
     add_rules("commonlibsse.plugin", {
         name = "NemesisCombatAI",
         author = "GennyWoo",
         description = "NPC combat mind: tiered morale, leader effects, caster style grading",
         license = "MIT",
-        options = { address_library = true, no_struct_use = true }
+        options = { address_library = true, no_struct_use = false, layout_dependent = true }
     })
     add_files("src/**.cpp")
     add_headerfiles("src/**.h")

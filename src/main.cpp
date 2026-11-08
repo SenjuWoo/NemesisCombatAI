@@ -736,9 +736,17 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse)
 {
     SKSE::Init(skse);
     SetupLog();
-    // Log the exact game build: every support report needs it, and the fork serves 1.5.97 through 1.7.104.
+    // Log the exact game build: every support report needs it.
     const auto gameVersion = REL::GetFileVersion("SkyrimSE.exe"sv);
     spdlog::info("NemesisCombatAI {} loading, game {}", SKSE::GetPluginVersion().string("."), gameVersion ? gameVersion->string(".") : "unknown"s);
+
+    // This build is compiled against the post-1.6.629 (AE) structure layout and writes engine fields directly
+    // (TESNPC::combatStyle, TESGlobal::value, Actor::currentCombatTarget). Skyrim SE 1.5.97 uses the older
+    // layout, so refuse it instead of writing at the wrong offsets.
+    if (gameVersion && *gameVersion < REL::Version{ 1, 6, 629, 0 }) {
+        spdlog::critical("Skyrim {} uses the pre-1.6.629 structure layout; this build needs AE 1.6.629 or newer - disabled", gameVersion->string("."));
+        return false;
+    }
 
     const auto ser = SKSE::GetSerializationInterface();
     ser->SetUniqueID(kCoSaveId);

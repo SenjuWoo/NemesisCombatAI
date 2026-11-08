@@ -1,4 +1,4 @@
-Nemesis Combat AI 3.0.1
+Nemesis Combat AI 3.0.2
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
@@ -6,9 +6,11 @@ spells, NFF owns follower commands.
 
 REQUIREMENTS
   Hard:     SKSE64 for your game build, and the Address Library for SKSE Plugins that matches that exact build.
-            Skyrim SE 1.5.97, AE 1.6.x and AE 1.7.99/1.7.104 are supported by the same DLL. For 1.7.99/1.7.104
-            you need Address Library All-in-One v13 or newer (it adds versionlib-1-7-104-0.bin); older builds use
-            v11. No Visual C++ redistributable is needed: the runtime is linked statically. VR is not supported.
+            Skyrim AE 1.6.629 or newer, including 1.6.1170, 1.6.1179, 1.7.99 and 1.7.104, all work with this one
+            DLL. For 1.7.99/1.7.104 you need Address Library All-in-One v13 or newer (it adds
+            versionlib-1-7-104-0.bin); 1.6.x uses v11. Skyrim SE 1.5.97 is NOT supported: the plugin refuses to
+            load on it instead of writing engine fields at the older layout's offsets. No Visual C++ redistributable
+            is needed: the runtime is linked statically. VR is not supported.
   For the tiered combat styles: SkyPatcher.   For the in-game menu: SkyUI + MCM Helper.
   Optional: Dynamic Grip, For Honor In Skyrim BFCO (both detected automatically), KID (only tags weapons and
             armor with keywords that other mods may use; Nemesis itself no longer needs it).
@@ -45,12 +47,14 @@ TROUBLESHOOTING
   Log: Documents\My Games\Skyrim Special Edition\SKSE\NemesisCombatAI.log. It shows the version and game build,
   settings read, integrations found, how many casters were graded, and the first verdicts of a session. When
   reporting a problem, include that file and your SKSE log (skse64.log).
+  "Skyrim 1.5.97 uses the pre-1.6.629 structure layout" in the log: you are on Skyrim SE 1.5.97, which this build
+  does not support. Update to AE 1.6.629 or newer, or stay on Nemesis Combat AI 2.0.4.
   "REL/ID.h(...): failed to open address library file" or "Unsupported address library format" from this DLL means
   your Address Library does not match your game build; update it (v13 or newer for 1.7.99/1.7.104). 3.0.1 is built to
   fix the version of this error that 3.0.0 threw on 1.7.104; confirmation on 1.7.x is still pending.
 
 TESTING STATUS
   Built from source, host-tested and tool-validated. Gameplay was played on 3.0.0 (loading, integrations, caster
-  grading and morale in a bandit fight). The 3.0.1 DLL itself was only load-tested, on Skyrim 1.6.1170: gameplay in
-  3.0.1 and any run on 1.7.x are not confirmed yet. Long sessions, huge battles and every mod combination are
-  untested; report anything odd.
+  grading and morale in a bandit fight). The 3.0.2 DLL changes only the compatibility declaration and adds the
+  SE guard; it has not been played, and no run on 1.7.x is confirmed yet. Long sessions, huge battles and every mod
+  combination are untested; report anything odd.
