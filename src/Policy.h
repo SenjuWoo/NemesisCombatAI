@@ -175,4 +175,13 @@ namespace NCAI
 
     // Confidence stays on the engine's authored scale.
     [[nodiscard]] inline float ClampConfidence(float a_value) noexcept { return std::clamp(a_value, 0.0F, 4.0F); }
+
+    // One grading pass per world. 0 means "never graded", which must not look like "already graded in world 0".
+    [[nodiscard]] constexpr bool ShouldGrade(std::uint32_t a_gradedGeneration, std::uint32_t a_worldGeneration) noexcept
+    {
+        return a_gradedGeneration == 0 || a_gradedGeneration != a_worldGeneration;
+    }
+
+    // A keyword may be removed by us only if we added it and it is still on the base.
+    [[nodiscard]] constexpr bool OwnsKeyword(bool a_addedByUs, bool a_present) noexcept { return a_addedByUs && a_present; }
 }

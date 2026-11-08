@@ -54,20 +54,20 @@ cd NemesisCombatAI
 xmake f -p windows -a x64 -m release -y
 xmake b -y                                    # plugin and host policy tests
 ./build/windows/x64/release/policy_tests.exe
-python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.3
+python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.4
 python tools/check_package.py
-python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.3.zip
+python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.4.zip --expect-version 3.0.4
 ```
 
 The plugin is linked with the static C runtime, so it does not need the Visual C++ redistributable. The build never deploys anything to your game.
 
 ## Status
 
-3.0.3 is the correctness candidate: it fixes the Confidence modifier (signed permanent change instead of a stripped-sign damage value), moves the co-save to v2 and drops the unreplayable v1 records, releases its Dynamic Grip keywords and reconciles ownership, and keeps caster-style originals so grading can be undone.
+3.0.4 is the lifecycle candidate: 3.0.3 fixed the Confidence modifier (signed permanent change), moved the co-save to v2 and added keyword/style ownership; 3.0.4 gives those edits back on a world change, fixes the "never graded" generation case and makes the packager refuse a DLL whose version block does not match.
 
-Verified on Skyrim AE **1.6.1170.0 with SKSE 2.2.8**: the plugin loads (`skse64.log`: `plugin NemesisCombatAI.dll (00000001 NemesisCombatAI 03000030) loaded correctly`), reaches `ready:`, reads a save (co-save recovered), grades caster styles (`graded rabble=589 trained=443 veteran=288 elite=248`) and excludes a For Honor master from Dynamic Grip (`grip: FE65380C (Genevieve) excluded ... For Honor master`). Confidence readback in game (`getav confidence` before/after a fight) is still a manual step - procedure in `publication/3.0.3/READBACK-PROCEDURE.txt` of the private workspace.
+Verified on Skyrim AE **1.6.1170.0 with SKSE 2.2.8**: loads (`plugin NemesisCombatAI.dll (00000001 NemesisCombatAI 03000030) loaded correctly` on 3.0.3), reaches `ready:`, reads a save, grades caster styles (`graded rabble=589 trained=443 veteran=288 elite=248`) and excludes a For Honor master from Dynamic Grip (`grip: FE65380C (Genevieve) excluded ... For Honor master`).
 
-**Not tested on 1.7.99/1.7.104** - the builds the original address-library fix targets. Declared compatibility only; it must not be described as gameplay-tested there.
+**Not verified:** the Confidence value itself has not been read back in game (`getav confidence` before/during/after a fight), the save-switch cleanup has not been observed, and no 1.7.99/1.7.104 run exists. Declared compatibility for 1.7.x is not proof. Combat behaviour on 3.0.3/3.0.4 is untested; 3.0.0 was played on this build.
 
 ## Licence and credits
 

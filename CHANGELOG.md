@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.4
+
+- `OnRevert` now gives back both in-memory edits before the world changes: owned Dynamic Grip keywords are removed and edited caster styles are restored, so the next save starts from the authored data instead of inheriting the previous world's edits.
+- Fixed the generation guard: a fresh process (world generation 0) no longer looks like "already graded in world 0", so the first grading pass always runs; a failed or disabled pass stays retryable.
+- Release packager refuses a DLL whose SKSE version block does not match `--expect-version`.
+- INSTALL testing section corrected (3.0.2 text replaced with the actual 3.0.3/3.0.4 evidence).
+- No gameplay, record, FormID or co-save layout change beyond 3.0.3.
+
 ## 3.0.3
 
 - **Fixed the Confidence modifier.** In this CommonLibSSE fork `RestoreActorValue()` converts the amount to `|delta|` and posts it on the damage channel, so 3.0.1/3.0.2 applied morale bonuses as penalties and left temporary damage instead of a base change. Shifts now use `ModActorValue(kPermanent)`, which keeps both the sign and the authored value.

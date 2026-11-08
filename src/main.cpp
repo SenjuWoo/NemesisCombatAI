@@ -659,7 +659,7 @@ namespace
     {
         // Bases live for the whole process, so one pass per world is enough - but a pass that could not run (styles
         // plugin missing, data not ready) must not block a later attempt, hence a generation guard, not a done flag.
-        if (g_casterGeneration == g_generation.load()) return;
+        if (!ShouldGrade(g_casterGeneration, g_generation.load())) return;
         if (!g_cfg.casterTiers) {
             RestoreCasterStyles("caster grading off"sv);
             return;
@@ -771,6 +771,10 @@ namespace
             }
         }
         if (released) spdlog::info("revert: released {} actor(s) before clearing state", released);
+        // Base records outlive the world, so the two in-memory edits have to be given back here as well: the next
+        // world re-applies them from a clean state instead of inheriting whatever the previous save happened to have.
+        ReleaseGripBlocks("world change"sv);
+        RestoreCasterStyles("world change"sv);
         ++g_generation;
         g_tracked.clear();
         g_pending.clear();

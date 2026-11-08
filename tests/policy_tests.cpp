@@ -151,6 +151,18 @@ int main()
         assert(ClampConfidence(9.0F) == 4.0F);
     }
 
+    // ---- lifecycle helpers ----
+    // A world that was never graded (0) must be graded, even when the world generation is also 0.
+    assert(ShouldGrade(0, 0));
+    // Same world graded twice: no second pass.
+    assert(!ShouldGrade(1, 1));
+    // New world after a revert: grade again.
+    assert(ShouldGrade(1, 2));
+    // A keyword is ours to remove only when we added it and it is still present.
+    assert(OwnsKeyword(true, true));
+    assert(!OwnsKeyword(true, false));   // another mod or the console removed it
+    assert(!OwnsKeyword(false, true));   // a foreign keyword we never added
+
     std::puts("policy_tests passed");
     return 0;
 }

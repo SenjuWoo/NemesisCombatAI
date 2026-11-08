@@ -1,4 +1,4 @@
-Nemesis Combat AI 3.0.3
+Nemesis Combat AI 3.0.4
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
@@ -62,6 +62,6 @@ TROUBLESHOOTING
 
 TESTING STATUS
   Built from source, host-tested and tool-validated. Gameplay was played on 3.0.0 (loading, integrations, caster
-  grading and morale in a bandit fight). The 3.0.2 DLL changes only the compatibility declaration and adds the
-  SE guard; it has not been played, and no run on 1.7.x is confirmed yet. Long sessions, huge battles and every mod
+  grading and morale in a bandit fight). 3.0.3/3.0.4 were load-tested on Skyrim AE 1.6.1170 (load, ready, save load,
+  caster grading, For Honor master exclusion); combat behaviour and 1.7.x are not confirmed yet. Long sessions, huge battles and every mod
   combination are untested; report anything odd.

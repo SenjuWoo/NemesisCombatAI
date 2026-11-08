@@ -1,12 +1,29 @@
 """Builds the FOMOD release archive: package/ plus the built DLL. Deterministic: entries sorted by archive path,
 fixed timestamps, forward-slash paths, no build output or manager bookkeeping.
-Usage: make_release_zip.py <NemesisCombatAI.dll> <out.zip>"""
-import hashlib, os, sys, zipfile
+Usage: make_release_zip.py <NemesisCombatAI.dll> <out.zip> [--expect-version X.Y.Z]
+The version check reads the SKSE version block out of the DLL, so a stale build cannot be packaged by mistake."""
+import hashlib, os, subprocess, sys, zipfile
 
 DLL_ARC = '00 Core/SKSE/Plugins/NemesisCombatAI.dll'
 BANNED = ('__folder_managed_by_vortex', 'meta.ini', '.meta', 'Thumbs.db', '.pdb', '.log')
 
-dll, out = sys.argv[1], sys.argv[2]
+args = sys.argv[1:]
+expect = None
+if '--expect-version' in args:
+    i = args.index('--expect-version')
+    expect = args[i + 1]
+    del args[i:i + 2]
+if len(args) != 2:
+    sys.exit(__doc__)
+dll, out = args
+
+if expect:
+    verifier = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'verify_version_block.py')
+    check = subprocess.run([sys.executable, verifier, dll, '--expect-version', expect], capture_output=True, text=True)
+    if check.returncode != 0:
+        print(check.stdout, check.stderr)
+        sys.exit(f'packaging aborted: the DLL does not carry version {expect}')
+    print(f'dll version verified: {expect}')
 package = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'package')
 
 entries = {}
