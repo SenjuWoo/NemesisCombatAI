@@ -2,7 +2,7 @@
 
 ## 3.0.1
 
-- Fixed the startup popup `REL/ID.h(219): failed to open address library file` on Skyrim 1.7.104 (reported by several users right after 3.0.0).
+- Addresses the startup failure `REL/ID.h(219): failed to open address library file` that 3.0.0 caused on Skyrim 1.7.104 (reported by several users right after release). Verification on 1.7.104 is still pending: the fix is build-validated (version block and format-5 reader present in the binary) and the DLL is load-tested on 1.6.1170.
 - Cause: 3.0.0 was built on a CommonLibSSE pin that only knows game builds up to 1.6.x and only reads Address Library formats 1-2, and its version block did not set the `AddressLibraryV5` flag SKSE uses for 1.7.x. SKSE's build-timestamp fallback let the plugin load, and its own address library reader then failed.
 - The plugin now builds on CommonLibSSE (libxse fork): game builds 1.5.97 through 1.7.104 with one DLL, Address Library format 5 (v13) included. The version block declares Address Library independence and the v5 contract, and `tools/verify_version_block.py` checks the built binary in CI.
 - The C runtime is linked statically, so the Visual C++ redistributable is no longer a requirement.

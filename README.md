@@ -67,6 +67,6 @@ The plugin is linked with the static C runtime, so it does not need the Visual C
 
 ## Licence and credits
 
-The source and package files are released under the [MIT licence](LICENSE). The plugin statically links CommonLibSSE-NG, spdlog, fmt and rapidcsv under their own licences; their notices ship in [`package/00 Core/THIRD-PARTY-NOTICES.txt`](package/00%20Core/THIRD-PARTY-NOTICES.txt). Dynamic Grip is by bosn; no files or assets of Dynamic Grip, For Honor or NPC Spell Variance are included.
+The source and package files are released under the [MIT licence](LICENSE). The plugin statically links CommonLibSSE (libxse fork, GPL-3.0-or-later with the Modding Exception and the GPL-3.0 Linking Exception), spdlog and fmt under their own licences; their notices and the licence texts ship in [`package/00 Core/THIRD-PARTY-NOTICES.txt`](package/00%20Core/THIRD-PARTY-NOTICES.txt) and `package/00 Core/licenses/`. Dynamic Grip is by bosn; no files or assets of Dynamic Grip, For Honor or NPC Spell Variance are included.
 
 The plugin source, installer and documentation were written with AI assistance and then built, tested and checked with tools and in game.

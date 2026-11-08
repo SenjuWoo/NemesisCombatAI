@@ -46,10 +46,11 @@ TROUBLESHOOTING
   settings read, integrations found, how many casters were graded, and the first verdicts of a session. When
   reporting a problem, include that file and your SKSE log (skse64.log).
   "REL/ID.h(...): failed to open address library file" or "Unsupported address library format" from this DLL means
-  your Address Library does not match your game build; update it (v13 or newer for 1.7.99/1.7.104). 3.0.1 fixed the
-  version of this error that 3.0.0 caused on 1.7.104.
+  your Address Library does not match your game build; update it (v13 or newer for 1.7.99/1.7.104). 3.0.1 is built to
+  fix the version of this error that 3.0.0 threw on 1.7.104; confirmation on 1.7.x is still pending.
 
 TESTING STATUS
-  Built from source, host-tested and tool-validated. A real-world play session confirmed loading, integrations
-  and caster grading without errors. Long sessions, huge battles and every mod combination are untested; report
-  anything odd.
+  Built from source, host-tested and tool-validated. Gameplay was played on 3.0.0 (loading, integrations, caster
+  grading and morale in a bandit fight). The 3.0.1 DLL itself was only load-tested, on Skyrim 1.6.1170: gameplay in
+  3.0.1 and any run on 1.7.x are not confirmed yet. Long sessions, huge battles and every mod combination are
+  untested; report anything odd.
