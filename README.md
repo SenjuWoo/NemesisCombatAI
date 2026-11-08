@@ -63,7 +63,7 @@ The plugin is linked with the static C runtime, so it does not need the Visual C
 
 ## Status
 
-Built from source, host-tested and statically validated. A real play session on an earlier build confirmed that the plugin loads, finds its integrations, grades casters and applies morale without errors. Not yet confirmed in game: Dynamic Grip honoring the exclusion on For Honor masters in every situation, long sessions, very large battles and every mod combination. Host tests and a successful build do not prove runtime safety. There are no screenshots yet.
+3.0.1 is a compatibility rebuild of 3.0.0: same plugin behaviour, new build toolchain and a corrected Address Library declaration. Verified so far: builds, host policy tests, package/FOMOD checks, and a real load on Skyrim 1.6.1170 (`skse64.log`: "loaded correctly"; plugin log: "NemesisCombatAI 3.0.1.0 loading, game 1.6.1170.0"). **Not yet run on 1.7.99/1.7.104**, the builds the fix is for - 1.7.x reports (with `skse64.log` and `NemesisCombatAI.log`) are wanted. Gameplay was played on 3.0.0 on 1.6.1170, and 3.0.1 changes no gameplay code. Not confirmed in game: Dynamic Grip honoring the exclusion on For Honor masters in every situation, long sessions, very large battles and every mod combination. Host tests and a successful build do not prove runtime safety. There are no screenshots yet.
 
 ## Licence and credits
 
