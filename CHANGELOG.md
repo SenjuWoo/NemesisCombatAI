@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.5
+
+- Dynamic Grip ownership moved into one ledger. `ReleaseAll()` now clears the bookkeeping even when this plugin never added a keyword - a base that only holds a For Honor master no longer leaves a stale exclusion behind on a world change or when the option is switched off.
+- Caster grading uses an explicit `GradeState` (`graded` flag + world generation) instead of overloading generation 0 as "never graded". The first world of a process always grades, a failed or skipped pass stays retryable, and `Reset()` is called whenever styles are restored.
+- Documentation now separates runtime-confirmed support (AE 1.6.1170) from declared support (1.6.629-1.6.1179, 1.7.99, 1.7.104) in both README and INSTALL.
+- Tests cover the state transitions: first world grading, repeat pass, failed pass retry, save A -> B -> A, ledger release with owned/foreign keywords, and repeated cleanup.
+
 ## 3.0.4
 
 - `OnRevert` now gives back both in-memory edits before the world changes: owned Dynamic Grip keywords are removed and edited caster styles are restored, so the next save starts from the authored data instead of inheriting the previous world's edits.

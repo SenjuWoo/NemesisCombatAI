@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <unordered_set>
+#include <vector>
 
 namespace NCAI
 {
@@ -176,11 +178,36 @@ namespace NCAI
     // Confidence stays on the engine's authored scale.
     [[nodiscard]] inline float ClampConfidence(float a_value) noexcept { return std::clamp(a_value, 0.0F, 4.0F); }
 
-    // One grading pass per world. 0 means "never graded", which must not look like "already graded in world 0".
-    [[nodiscard]] constexpr bool ShouldGrade(std::uint32_t a_gradedGeneration, std::uint32_t a_worldGeneration) noexcept
+    // One grading pass per world. The graded flag is separate from the generation on purpose: a world generation of
+    // 0 is a real world, and a pass that failed or was skipped must not look like one that succeeded.
+    struct GradeState
     {
-        return a_gradedGeneration == 0 || a_gradedGeneration != a_worldGeneration;
-    }
+        bool graded = false;
+        std::uint32_t generation = 0;
+
+        [[nodiscard]] bool NeedsPass(std::uint32_t a_world) const { return !graded || generation != a_world; }
+        void Recorded(std::uint32_t a_world) { graded = true; generation = a_world; }
+        void Reset() { graded = false; generation = 0; }
+    };
+
+    // Ownership bookkeeping for Dynamic Grip, held in one place so a release cannot forget half of it.
+    struct GripLedger
+    {
+        std::unordered_set<std::uint32_t> blocked;  // bases where this plugin added the blacklist keyword
+
+        [[nodiscard]] bool OwnedByUs(std::uint32_t a_base) const { return blocked.contains(a_base); }
+        void Block(std::uint32_t a_base) { blocked.insert(a_base); }
+        // Take one base back off the ledger; true when it was ours.
+        bool TakeBack(std::uint32_t a_base) { return blocked.erase(a_base) > 0; }
+
+        // Every base whose keyword must be removed. The ledger is empty afterwards even when nothing was owned.
+        [[nodiscard]] std::vector<std::uint32_t> ReleaseAll()
+        {
+            std::vector<std::uint32_t> out(blocked.begin(), blocked.end());
+            blocked.clear();
+            return out;
+        }
+    };
 
     // A keyword may be removed by us only if we added it and it is still on the base.
     [[nodiscard]] constexpr bool OwnsKeyword(bool a_addedByUs, bool a_present) noexcept { return a_addedByUs && a_present; }

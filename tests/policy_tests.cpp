@@ -151,13 +151,68 @@ int main()
         assert(ClampConfidence(9.0F) == 4.0F);
     }
 
-    // ---- lifecycle helpers ----
-    // A world that was never graded (0) must be graded, even when the world generation is also 0.
-    assert(ShouldGrade(0, 0));
-    // Same world graded twice: no second pass.
-    assert(!ShouldGrade(1, 1));
-    // New world after a revert: grade again.
-    assert(ShouldGrade(1, 2));
+    // ---- grading state across worlds (the 3.0.4 sentinel bug in transition form) ----
+    {
+        GradeState st;
+        assert(st.NeedsPass(0));          // first world of the process is generation 0 and must be graded
+        st.Recorded(0);
+        assert(!st.NeedsPass(0));         // same world: no second pass
+        assert(st.NeedsPass(1));          // new world: grade again
+        st.Reset();                       // styles restored (option off / world change)
+        assert(st.NeedsPass(0));          // and retryable in the same world afterwards
+    }
+    {
+        // A pass that could not run (missing styles plugin) records nothing, so it stays retryable.
+        GradeState st;
+        const bool ran = false;
+        if (ran) st.Recorded(0);
+        assert(st.NeedsPass(0));
+        st.Recorded(0);
+        assert(!st.NeedsPass(0));
+        st.Recorded(0);                   // repeated record is harmless
+        assert(!st.NeedsPass(0));
+        assert(st.NeedsPass(2));          // save A -> save B
+        st.Recorded(2);
+        assert(!st.NeedsPass(2));
+        assert(st.NeedsPass(1));          // back to save A's world still needs its own pass
+    }
+
+    // ---- Dynamic Grip ownership ledger ----
+    {
+        // A For Honor master that already carried the keyword: nothing of ours to remove, ledger still ends clean.
+        GripLedger g;
+        assert(g.ReleaseAll().empty());
+        assert(g.blocked.empty());
+        // Repeat release on an already-clean ledger does nothing harmful.
+        assert(g.ReleaseAll().empty());
+    }
+    {
+        GripLedger g;
+        g.Block(10);
+        g.Block(20);
+        assert(g.OwnedByUs(10));
+        const auto owned = g.ReleaseAll();
+        assert(owned.size() == 2);
+        assert(g.blocked.empty() && !g.OwnedByUs(10));
+        assert(g.ReleaseAll().empty());
+    }
+    {
+        // One base ours, another only seen as a master: release returns only ours and clears the ledger.
+        GripLedger g;
+        g.Block(0xAAA);
+        const auto owned = g.ReleaseAll();
+        assert(owned.size() == 1 && owned[0] == 0xAAA);
+        assert(g.blocked.empty());
+    }
+    {
+        // Taking a keyword back one base at a time (keyword was taken off by another mod) keeps the ledger honest.
+        GripLedger g;
+        g.Block(5);
+        assert(g.TakeBack(5));
+        assert(!g.TakeBack(5));
+        assert(!g.OwnedByUs(5));
+        assert(g.ReleaseAll().empty());
+    }
     // A keyword is ours to remove only when we added it and it is still present.
     assert(OwnsKeyword(true, true));
     assert(!OwnsKeyword(true, false));   // another mod or the console removed it

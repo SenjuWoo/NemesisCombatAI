@@ -88,8 +88,8 @@ namespace
     // All state below is touched on the game thread only (events are re-posted through the task interface).
     std::unordered_map<RE::FormID, Tracked> g_tracked;
     std::unordered_map<RE::FormID, Legacy> g_pending;     // restores read from the co-save, not yet applied
-    std::unordered_set<RE::FormID> g_gripBlocked;         // NPC bases we put the Dynamic Grip blacklist on (foreign ones are never removed)
-    std::unordered_set<RE::FormID> g_masterBases;         // bases that hold a For Honor master this session: never unblocked
+    GripLedger g_grip;                                    // Dynamic Grip keywords this plugin added (foreign ones are never touched)
+    std::unordered_set<RE::FormID> g_masterBases;         // bases that hold a For Honor master this world: never unblocked
     std::atomic<std::uint32_t> g_generation{ 0 };
     std::atomic<std::size_t> g_trackedCount{ 0 };
     std::atomic<bool> g_ready{ false };
@@ -321,10 +321,10 @@ namespace
         const bool has = keywords->HasKeyword(g_int.gripBlock);
         if (block && !has) {
             if (keywords->AddKeyword(g_int.gripBlock)) {
-                g_gripBlocked.insert(base->GetFormID());
+                g_grip.Block(base->GetFormID());
                 spdlog::info("grip: {:08X} ({}) excluded from Dynamic Grip: {}", actor->GetFormID(), actor->GetName(), why);
             }
-        } else if (!block && has && g_gripBlocked.erase(base->GetFormID()) > 0) {
+        } else if (!block && has && g_grip.TakeBack(base->GetFormID())) {
             keywords->RemoveKeyword(g_int.gripBlock);
         }
     }
@@ -333,9 +333,11 @@ namespace
     // they are never touched. Called when the grip option is switched off and when the plugin is disabled.
     void ReleaseGripBlocks(std::string_view why)
     {
-        if (g_gripBlocked.empty()) return;
+        // Both halves are cleared unconditionally: a base can hold a For Honor master without ever having received a
+        // keyword of ours, and leaving the master list behind would keep a stale exclusion across worlds.
+        const auto owned = g_grip.ReleaseAll();
         std::size_t removed = 0;
-        for (const auto id : g_gripBlocked) {
+        for (const auto id : owned) {
             if (auto* base = RE::TESForm::LookupByID<RE::TESNPC>(id)) {
                 auto* keywords = static_cast<RE::BGSKeywordForm*>(base);
                 if (keywords && keywords->HasKeyword(g_int.gripBlock)) {
@@ -344,8 +346,10 @@ namespace
                 }
             }
         }
-        spdlog::info("grip: released {} owned blacklist keyword(s) of {} tracked base(s) ({})", removed, g_gripBlocked.size(), why);
-        g_gripBlocked.clear();
+        if (!owned.empty() || !g_masterBases.empty()) {
+            spdlog::info("grip: released {} owned blacklist keyword(s) of {} tracked base(s), cleared {} master base(s) ({})",
+                removed, owned.size(), g_masterBases.size(), why);
+        }
         g_masterBases.clear();
     }
 
@@ -353,7 +357,7 @@ namespace
     // command) removed is no longer ours to remove, and keeping it in the set would claim ownership we lost.
     void ReconcileGrip()
     {
-        std::erase_if(g_gripBlocked, [](RE::FormID id) {
+        std::erase_if(g_grip.blocked, [](RE::FormID id) {
             const auto* base = RE::TESForm::LookupByID<RE::TESNPC>(id);
             return !base || !static_cast<const RE::BGSKeywordForm*>(base)->HasKeyword(g_int.gripBlock);
         });
@@ -423,7 +427,7 @@ namespace
         if (g_cfg.gripTiers) {
             SetGripBlock(actor, !GripSchooled(mind.tier, profile.doctrine, profile.master),
                 std::format("tier {} intellect {:.2f}", static_cast<int>(mind.tier), mind.intellect));
-        } else if (!g_gripBlocked.empty()) {
+        } else if (!g_grip.blocked.empty()) {
             ReleaseGripBlocks("grip option off"sv);   // the option was switched off: hand the keywords back
         }
         t.lastStand = mind.lastStand;
@@ -645,7 +649,7 @@ namespace
     // Authored combat styles we replaced, so the change can be undone instead of leaking for the whole process.
     struct CasterEdit { RE::TESCombatStyle* original = nullptr; };
     std::unordered_map<RE::FormID, CasterEdit> g_casterEdits;
-    std::uint32_t g_casterGeneration = 0;   // 0 = not graded yet in this world
+    GradeState g_casterState;               // graded flag + world it was graded in; 0 is a real world
 
     void RestoreCasterStyles(std::string_view why)
     {
@@ -655,14 +659,14 @@ namespace
         }
         spdlog::info("caster tiers: restored {} authored style(s) ({})", g_casterEdits.size(), why);
         g_casterEdits.clear();
-        g_casterGeneration = 0;
+        g_casterState.Reset();
     }
 
     void GradeCasterStyles(RE::TESDataHandler* data)
     {
         // Bases live for the whole process, so one pass per world is enough - but a pass that could not run (styles
         // plugin missing, data not ready) must not block a later attempt, hence a generation guard, not a done flag.
-        if (!ShouldGrade(g_casterGeneration, g_generation.load())) return;
+        if (!g_casterState.NeedsPass(g_generation.load())) return;
         if (!g_cfg.casterTiers) {
             RestoreCasterStyles("caster grading off"sv);
             return;
@@ -699,7 +703,7 @@ namespace
             npc->combatStyle = pools[tier][PoolSlot(npc->GetFormID())];
             ++graded[tier];
         }
-        g_casterGeneration = g_generation.load();
+        g_casterState.Recorded(g_generation.load());
         spdlog::info("caster tiers: graded rabble={} trained={} veteran={} elite={}, left alone={}", graded[0], graded[1], graded[2], graded[3], skipped);
     }
 

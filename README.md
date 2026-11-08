@@ -28,7 +28,18 @@ The mod is distributed on [Nexus Mods](https://www.nexusmods.com/skyrimspecialed
 
 ## Requirements
 
-SKSE64 and the Address Library for SKSE Plugins, both matching your game build. One DLL serves Skyrim AE 1.6.629 or newer (1.6.x, 1.7.99, 1.7.104); 1.7.99/1.7.104 need Address Library All-in-One v13 or newer, 1.6.x uses v11. Skyrim SE 1.5.97 uses the older structure layout and the plugin refuses to load on it. The plugin links the C runtime statically, so the Visual C++ redistributable is not required. SkyPatcher is needed for the tiered styles, SkyUI and MCM Helper for the menu. Dynamic Grip, For Honor In Skyrim BFCO and NPC Spell Variance are optional and detected automatically. Skyrim SE/AE only; VR is not supported.
+SKSE64 for your game build, plus the Address Library release that matches that build (1.6.x uses v11; 1.7.99/1.7.104 need All-in-One v13 or newer, which adds `versionlib-1-7-104-0.bin`). SkyPatcher for the tiered style plugin, SkyUI + MCM Helper for the menu.
+
+**Runtime-confirmed vs declared** — this distinction matters when deciding whether to update:
+
+| Game build | State | Evidence |
+|---|---|---|
+| Skyrim AE 1.6.1170 (SKSE 2.2.8) | runtime-confirmed | plugin loads, initialises, reads a save, grades casters, excludes a For Honor master |
+| Skyrim AE 1.6.629 – 1.6.1179 | declared only | version block advertises it; no run recorded |
+| Skyrim AE 1.7.99 / 1.7.104 | declared only | version block carries `AddressLibraryV5`; **no run recorded** |
+| Skyrim SE 1.5.97 | unsupported | plugin refuses to load (AE struct layout) |
+
+The tiered styles need SkyTactics' plugin disabled; Dynamic Grip and For Honor are optional and detected automatically.
 
 ## Settings
 

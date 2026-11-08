@@ -1,4 +1,4 @@
-Nemesis Combat AI 3.0.4
+Nemesis Combat AI 3.0.5
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
@@ -6,11 +6,14 @@ spells, NFF owns follower commands.
 
 REQUIREMENTS
   Hard:     SKSE64 for your game build, and the Address Library for SKSE Plugins that matches that exact build.
-            Skyrim AE 1.6.629 or newer, including 1.6.1170, 1.6.1179, 1.7.99 and 1.7.104, all work with this one
-            DLL. For 1.7.99/1.7.104 you need Address Library All-in-One v13 or newer (it adds
-            versionlib-1-7-104-0.bin); 1.6.x uses v11. Skyrim SE 1.5.97 is NOT supported: the plugin refuses to
-            load on it instead of writing engine fields at the older layout's offsets. No Visual C++ redistributable
-            is needed: the runtime is linked statically. VR is not supported.
+            Runtime-confirmed by the author: Skyrim AE 1.6.1170 with SKSE 2.2.8 (loads, initialises, reads a save,
+            grades casters). DECLARED but NOT yet runtime-tested: 1.6.629-1.6.1179, 1.7.99 and 1.7.104 - the version
+            block advertises those builds and the code has no build-specific paths, but that is a declaration, not a
+            test. If one of them refuses to start, report the build and the log instead of assuming it should work.
+            Address Library: 1.6.x needs v11, 1.7.99/1.7.104 need All-in-One v13 or newer (it adds
+            versionlib-1-7-104-0.bin). Skyrim SE 1.5.97 is NOT supported: the plugin refuses to load on it instead of
+            writing engine fields at the older layout's offsets. No Visual C++ redistributable is needed: the runtime
+            is linked statically. VR is not supported.
   For the tiered combat styles: SkyPatcher.   For the in-game menu: SkyUI + MCM Helper.
   Optional: Dynamic Grip, For Honor In Skyrim BFCO (both detected automatically), KID (only tags weapons and
             armor with keywords that other mods may use; Nemesis itself no longer needs it).
