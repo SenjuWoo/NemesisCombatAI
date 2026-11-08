@@ -1,4 +1,4 @@
-Nemesis Combat AI 3.0.2
+Nemesis Combat AI 3.0.3
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
@@ -38,6 +38,13 @@ SETTINGS
   In game: Mod Configuration Menu > Nemesis Combat AI.
   Files: Data/SKSE/Plugins/NemesisCombatAI.d/*.ini  (CasterTiers=0/1, GripTiers=0/1, and CasterStyle=Plugin.esp|HexFormID
   to grade another mod's caster style). Later file names win; add your own file instead of editing the shipped ones.
+
+UPDATING FROM 3.0.0 - 3.0.2
+  Those builds moved Confidence through the wrong engine channel (a temporary damage value, always with the sign
+  stripped), so a bonus could read as a penalty. 3.0.3 applies a proper signed permanent change.
+  Save records from those builds cannot be replayed safely, so outstanding records are dropped on load with one line
+  in the log. An actor that was mid-fight when such a save was made can keep a small Confidence offset until it
+  respawns; nothing else in the save is affected. New saves use co-save version 2.
 
 UNINSTALL
   Disable the mod. Nothing permanent is written to your save except an outstanding Confidence amount, which the

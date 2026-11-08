@@ -34,8 +34,12 @@ namespace
     using Clock = std::chrono::steady_clock;
     using namespace NCAI;
 
-    constexpr std::uint32_t kCoSaveId = 0x4E4D5349;     // 'NMSI', unchanged from 2.x so old co-saves still restore
-    constexpr std::uint32_t kCoSaveVersion = 1;         // formID + 4 floats (aggression, confidence, attack damage, speed)
+    constexpr std::uint32_t kCoSaveId = 0x4E4D5349;     // 'NMSI', unchanged from 2.x so the record is still found
+    // v2: the stored confidence delta is a signed permanent change owned by this build.
+    // v1 came from 3.0.0-3.0.2, whose RestoreActorValue() path applied |delta| on the damage channel; a v1 record
+    // therefore describes the wrong amount and the wrong channel, and nothing in the record says which build wrote
+    // it. Those records are dropped with a warning instead of being replayed with a guess (see OnLoad).
+    constexpr std::uint32_t kCoSaveVersion = 2;
     constexpr std::size_t kRecordSize = 20;
     constexpr std::size_t kMaxTracked = 64;
     constexpr std::size_t kMaxPending = 4096;
@@ -273,10 +277,14 @@ namespace
         return max > 1.0F ? std::clamp(actor->GetActorValue(RE::ActorValue::kHealth) / max, 0.0F, 1.0F) : 1.0F;
     }
 
+    // Signed permanent change. This fork's RestoreActorValue() is NOT the old CommonLibSSE call: it converts the
+    // value to |delta| and posts it on the kDamage channel, so bonuses were applied as penalties and the result was
+    // temporary damage instead of a base change (the 3.0.1/3.0.2 regression). ModActorValue(kPermanent) takes the
+    // delta as given and moves the authored value, which is what the tracked delta arithmetic assumes.
     void ApplyDelta(RE::Actor* actor, const Legacy& d)
     {
         const auto add = [&](RE::ActorValue which, float delta) {
-            if (delta != 0.0F) actor->RestoreActorValue(which, delta);
+            if (delta != 0.0F) actor->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kPermanent, which, delta);
         };
         add(RE::ActorValue::kAggression, d.aggression);
         add(RE::ActorValue::kConfidence, d.confidence);
@@ -318,6 +326,36 @@ namespace
         } else if (!block && has && g_gripBlocked.erase(base->GetFormID()) > 0) {
             keywords->RemoveKeyword(g_int.gripBlock);
         }
+    }
+
+    // Give back every blacklist keyword we put on a base ourselves. Other mods' keywords are never in this set, so
+    // they are never touched. Called when the grip option is switched off and when the plugin is disabled.
+    void ReleaseGripBlocks(std::string_view why)
+    {
+        if (g_gripBlocked.empty()) return;
+        std::size_t removed = 0;
+        for (const auto id : g_gripBlocked) {
+            if (auto* base = RE::TESForm::LookupByID<RE::TESNPC>(id)) {
+                auto* keywords = static_cast<RE::BGSKeywordForm*>(base);
+                if (keywords && keywords->HasKeyword(g_int.gripBlock)) {
+                    keywords->RemoveKeyword(g_int.gripBlock);
+                    ++removed;
+                }
+            }
+        }
+        spdlog::info("grip: released {} owned blacklist keyword(s) of {} tracked base(s) ({})", removed, g_gripBlocked.size(), why);
+        g_gripBlocked.clear();
+        g_masterBases.clear();
+    }
+
+    // Bases outlive a save, so the set must track what is still on the base: a keyword another mod (or a console
+    // command) removed is no longer ours to remove, and keeping it in the set would claim ownership we lost.
+    void ReconcileGrip()
+    {
+        std::erase_if(g_gripBlocked, [](RE::FormID id) {
+            const auto* base = RE::TESForm::LookupByID<RE::TESNPC>(id);
+            return !base || !static_cast<const RE::BGSKeywordForm*>(base)->HasKeyword(g_int.gripBlock);
+        });
     }
 
     // For Honor wins: a weapon master keeps For Honor's movesets, so Dynamic Grip must never re-grip it. Runs for
@@ -384,13 +422,15 @@ namespace
         if (g_cfg.gripTiers) {
             SetGripBlock(actor, !GripSchooled(mind.tier, profile.doctrine, profile.master),
                 std::format("tier {} intellect {:.2f}", static_cast<int>(mind.tier), mind.intellect));
+        } else if (!g_gripBlocked.empty()) {
+            ReleaseGripBlocks("grip option off"sv);   // the option was switched off: hand the keywords back
         }
         t.lastStand = mind.lastStand;
         t.next = now + kEvalCooldown;
 
         // Authored Confidence is the baseline; keep the final value inside the engine's 0..4 scale.
-        const float base = actor->GetActorValue(RE::ActorValue::kConfidence) - t.applied;
-        const float wanted = std::clamp(base + mind.confidenceShift, 0.0F, 4.0F) - base;
+        const float base = AuthoredBase(actor->GetActorValue(RE::ActorValue::kConfidence), t.applied);
+        const float wanted = ClampConfidence(base + mind.confidenceShift) - base;
         if (std::fabs(wanted - t.applied) >= 0.5F || (wanted == 0.0F && t.applied != 0.0F)) {
             ApplyDelta(actor, { 0.0F, wanted - t.applied, 0.0F, 0.0F });
             // The first verdicts of a session go to the info log as test evidence; later ones stay at debug.
@@ -599,12 +639,31 @@ namespace
         return p;
     }
 
+    // Authored combat styles we replaced, so the change can be undone instead of leaking for the whole process.
+    struct CasterEdit { RE::TESCombatStyle* original = nullptr; };
+    std::unordered_map<RE::FormID, CasterEdit> g_casterEdits;
+    std::uint32_t g_casterGeneration = 0;   // 0 = not graded yet in this world
+
+    void RestoreCasterStyles(std::string_view why)
+    {
+        if (g_casterEdits.empty()) return;
+        for (const auto& [id, edit] : g_casterEdits) {
+            if (auto* npc = RE::TESForm::LookupByID<RE::TESNPC>(id); npc && edit.original) npc->combatStyle = edit.original;
+        }
+        spdlog::info("caster tiers: restored {} authored style(s) ({})", g_casterEdits.size(), why);
+        g_casterEdits.clear();
+        g_casterGeneration = 0;
+    }
+
     void GradeCasterStyles(RE::TESDataHandler* data)
     {
-        static bool done = false;  // base records live for the whole session, one pass is enough
-        if (done) return;
-        done = true;
-        if (!g_cfg.casterTiers) return;
+        // Bases live for the whole process, so one pass per world is enough - but a pass that could not run (styles
+        // plugin missing, data not ready) must not block a later attempt, hence a generation guard, not a done flag.
+        if (g_casterGeneration == g_generation.load()) return;
+        if (!g_cfg.casterTiers) {
+            RestoreCasterStyles("caster grading off"sv);
+            return;
+        }
 
         RE::TESCombatStyle* pools[4][2]{};
         for (std::size_t tier = 0; tier < 4; ++tier) {
@@ -633,9 +692,11 @@ namespace
                 continue;
             }
             const auto tier = static_cast<std::size_t>(TierOf(Intellect(BaseProfile(npc))));
+            if (!g_casterEdits.contains(npc->GetFormID())) g_casterEdits.emplace(npc->GetFormID(), CasterEdit{ npc->combatStyle });
             npc->combatStyle = pools[tier][PoolSlot(npc->GetFormID())];
             ++graded[tier];
         }
+        g_casterGeneration = g_generation.load();
         spdlog::info("caster tiers: graded rabble={} trained={} veteran={} elite={}, left alone={}", graded[0], graded[1], graded[2], graded[3], skipped);
     }
 
@@ -665,8 +726,13 @@ namespace
     {
         g_pending.clear();
         std::uint32_t type = 0, version = 0, length = 0;
+        unsigned legacy = 0;
         while (ser->GetNextRecordInfo(type, version, length)) {
-            if (type != kCoSaveId || version != kCoSaveVersion) continue;
+            if (type != kCoSaveId) continue;
+            if (version != kCoSaveVersion) {
+                if (version < kCoSaveVersion) ++legacy;
+                continue;
+            }
             if (length % kRecordSize != 0 || length > kMaxPending * kRecordSize) {
                 spdlog::error("co-save: invalid record length {}", length);
                 continue;
@@ -686,11 +752,25 @@ namespace
                 if (ser->ResolveFormID(old, resolved)) g_pending[resolved] = { v[0], v[1], v[2], v[3] };
             }
         }
+        if (legacy) {
+            spdlog::warn("co-save: dropped {} legacy (v1) record(s): those builds applied |delta| on the damage channel and cannot be reversed without guessing", legacy);
+        }
         spdlog::info("co-save: {} pending delta record(s) recovered", g_pending.size());
     }
 
     void OnRevert(SKSE::SerializationInterface*)
     {
+        // Hand back what this world still has before dropping the bookkeeping: an actor that survives the transition
+        // (or a persistent reference) must not keep a permanent Confidence shift we applied.
+        unsigned released = 0;
+        for (auto& [id, t] : g_tracked) {
+            if (t.applied == 0.0F) continue;
+            if (auto* actor = ActorById(id)) {
+                ApplyDelta(actor, { 0.0F, -t.applied, 0.0F, 0.0F });
+                ++released;
+            }
+        }
+        if (released) spdlog::info("revert: released {} actor(s) before clearing state", released);
         ++g_generation;
         g_tracked.clear();
         g_pending.clear();
@@ -722,6 +802,7 @@ namespace
         case SKSE::MessagingInterface::kPostLoadGame:
         case SKSE::MessagingInterface::kNewGame:
             if (g_ready) {
+                ReconcileGrip();   // a new world may not have our keyword on a base any more
                 GradeCasterStyles(RE::TESDataHandler::GetSingleton());  // after every plugin's data-loaded work, so SkyPatcher has finished
                 ScanCombatants();  // Post() also drains restores read from the co-save
             }

@@ -54,9 +54,9 @@ cd NemesisCombatAI
 xmake f -p windows -a x64 -m release -y
 xmake b -y                                    # plugin and host policy tests
 ./build/windows/x64/release/policy_tests.exe
-python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.2
+python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.3
 python tools/check_package.py
-python tools/make_release_zip.py . ../NemesisCombatAI.zip
+python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.3.zip
 ```
 
 The plugin is linked with the static C runtime, so it does not need the Visual C++ redistributable. The build never deploys anything to your game.

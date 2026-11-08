@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.3
+
+- **Fixed the Confidence modifier.** In this CommonLibSSE fork `RestoreActorValue()` converts the amount to `|delta|` and posts it on the damage channel, so 3.0.1/3.0.2 applied morale bonuses as penalties and left temporary damage instead of a base change. Shifts now use `ModActorValue(kPermanent)`, which keeps both the sign and the authored value.
+- Co-save record version is now 2. Version 1 records (3.0.0-3.0.2) describe a different channel and amount, so they are dropped with one warning instead of being replayed with a guess. New saves store signed permanent deltas.
+- Every release path now hands the shift back: combat end, death, unload, `OnRevert` (which also releases any actor still resident before clearing state), and switching the feature off.
+- Dynamic Grip: keywords this plugin added are released when the grip option is off, and ownership is reconciled on save load, so a keyword another mod removed is no longer claimed.
+- Caster grading keeps each base's authored combat style and can restore it, and retries per world instead of a permanent one-shot flag.
+- Docs: release-zip command corrected (it takes the built DLL), 3.0.3 identifiers everywhere, update note for saves made with 3.0.0-3.0.2.
+
 ## 3.0.2
 
 - Corrected the SKSE version-independence declaration. The plugin reads and writes engine structures (`Actor::currentCombatTarget`, `TESNPC::combatStyle` and its level data, `TESGlobal::value`, `ProcessLists::highActorHandles`), so it now declares the post-1.6.629 layout instead of claiming `NoStructUse`. Same code paths, same behaviour; the loader sees an accurate declaration.

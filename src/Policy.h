@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace NCAI
 {
@@ -157,4 +158,21 @@ namespace NCAI
         mind.confidenceShift = std::round(std::clamp(shift, -2.5F, 2.5F) * 4.0F) / 4.0F;
         return mind;
     }
+
+    // ---- modifier contract, shared by the runtime and its host tests ----
+    // Co-save v1 (3.0.0-3.0.2) stored a delta that those builds applied as |delta| on the damage channel, so the
+    // record no longer describes what the engine actually holds. v2 stores the signed permanent delta this build owns.
+    inline constexpr std::uint32_t kLegacyCoSaveVersion = 1;
+    inline constexpr std::uint32_t kCoSaveVersion = 2;
+
+    [[nodiscard]] constexpr bool RestorableCoSave(std::uint32_t a_version) noexcept { return a_version >= kCoSaveVersion; }
+
+    // The delta a release applies to take our permanent change back off again.
+    [[nodiscard]] constexpr float RevertDelta(float a_applied) noexcept { return -a_applied; }
+
+    // Authored confidence as seen through our own applied delta.
+    [[nodiscard]] constexpr float AuthoredBase(float a_current, float a_applied) noexcept { return a_current - a_applied; }
+
+    // Confidence stays on the engine's authored scale.
+    [[nodiscard]] inline float ClampConfidence(float a_value) noexcept { return std::clamp(a_value, 0.0F, 4.0F); }
 }

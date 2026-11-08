@@ -99,6 +99,58 @@ int main()
     assert(std::isfinite(m.intellect) && std::fabs(m.confidenceShift) <= 2.5F);
     assert(std::fmod(std::fabs(m.confidenceShift) * 4.0F, 1.0F) == 0.0F);
 
+    // ---- modifier contract: signed application, reversal, idempotence, boundaries ----
+    // v1 records came from builds that applied |delta| on the damage channel; they are not replayable.
+    assert(!RestorableCoSave(kLegacyCoSaveVersion));
+    assert(RestorableCoSave(kCoSaveVersion));
+    assert(RestorableCoSave(kCoSaveVersion + 1));
+
+    // A permanent shift moves the value one way, and its revert moves it back - signs must be opposite.
+    {
+        float authored = 2.0F;
+        float applied = 0.0F;
+        const float shift = -0.75F;
+        // apply
+        float current = authored + shift;
+        applied = shift;
+        // revert
+        current += RevertDelta(applied);
+        applied = 0.0F;
+        assert(std::fabs(current - authored) < 1e-4F);
+        assert(std::fabs(RevertDelta(-0.75F) - 0.75F) < 1e-6F);
+    }
+
+    // Positive and negative shifts move in opposite directions (the 3.0.1/3.0.2 bug applied both as a penalty).
+    {
+        const float authored = 2.0F;
+        const float up = ClampConfidence(authored + 1.25F);   // 3.25
+        const float down = ClampConfidence(authored - 1.25F); // 0.75
+        assert(up > authored && down < authored);
+    }
+
+    // Reading the authored value back through our own delta and re-deciding the same shift must not add anything.
+    {
+        const float authored = 1.5F;
+        float applied = -0.5F;
+        const float current = authored + applied;
+        const float base = AuthoredBase(current, applied);
+        assert(std::fabs(base - authored) < 1e-5F);
+        const float wanted = ClampConfidence(base - 0.5F) - base;
+        assert(std::fabs(wanted - applied) < 1e-5F);  // same target: no further write
+    }
+
+    // Boundaries: a -2.5 shift on a low value stops at 0, a +2.5 shift on a high value stops at 4.
+    {
+        const float lowBase = 0.25F;
+        const float lowWanted = ClampConfidence(lowBase - 2.5F) - lowBase;
+        assert(std::fabs(lowWanted + 0.25F) < 1e-5F);
+        const float highBase = 3.75F;
+        const float highWanted = ClampConfidence(highBase + 2.5F) - highBase;
+        assert(std::fabs(highWanted - 0.25F) < 1e-5F);
+        assert(ClampConfidence(-1.0F) == 0.0F);
+        assert(ClampConfidence(9.0F) == 4.0F);
+    }
+
     std::puts("policy_tests passed");
     return 0;
 }

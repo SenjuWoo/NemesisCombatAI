@@ -12,7 +12,7 @@ add_ldflags("/Brepro", { force = true })
 includes("extern/commonlibsse")
 
 set_project("NemesisCombatAI")
-set_version("3.0.2")
+set_version("3.0.3")
 set_license("MIT")
 set_languages("c++23")
 set_warnings("allextra")
