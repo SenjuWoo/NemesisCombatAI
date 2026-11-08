@@ -63,7 +63,11 @@ The plugin is linked with the static C runtime, so it does not need the Visual C
 
 ## Status
 
-3.0.2 is a compatibility rebuild of 3.0.0 (3.0.1 corrected the Address Library v5 declaration, 3.0.2 corrected the structure-layout declaration and refuses Skyrim SE 1.5.97). Verified on Skyrim AE **1.6.1170.0 with SKSE 2.2.8**: the plugin loads (`skse64.log`: `plugin NemesisCombatAI.dll (00000001 NemesisCombatAI 03000020) loaded correctly`) and initialises (`NemesisCombatAI.log`: config read from both INI files, For Honor and Dynamic Grip integrations found, `ready: combat, death and hit sinks registered`, tiered styles plugin active). **Not yet run on 1.7.99/1.7.104**, the builds the original fix is for - 1.7.x reports with `skse64.log` and `NemesisCombatAI.log` are wanted. Gameplay was played on 3.0.0 on 1.6.1170 and no gameplay code changed since; combat, MCM and save/load have not been replayed on 3.0.2. Host tests and a successful load do not prove runtime safety. There are no screenshots yet.
+3.0.3 is the correctness candidate: it fixes the Confidence modifier (signed permanent change instead of a stripped-sign damage value), moves the co-save to v2 and drops the unreplayable v1 records, releases its Dynamic Grip keywords and reconciles ownership, and keeps caster-style originals so grading can be undone.
+
+Verified on Skyrim AE **1.6.1170.0 with SKSE 2.2.8**: the plugin loads (`skse64.log`: `plugin NemesisCombatAI.dll (00000001 NemesisCombatAI 03000030) loaded correctly`), reaches `ready:`, reads a save (co-save recovered), grades caster styles (`graded rabble=589 trained=443 veteran=288 elite=248`) and excludes a For Honor master from Dynamic Grip (`grip: FE65380C (Genevieve) excluded ... For Honor master`). Confidence readback in game (`getav confidence` before/after a fight) is still a manual step - procedure in `publication/3.0.3/READBACK-PROCEDURE.txt` of the private workspace.
+
+**Not tested on 1.7.99/1.7.104** - the builds the original address-library fix targets. Declared compatibility only; it must not be described as gameplay-tested there.
 
 ## Licence and credits
 
