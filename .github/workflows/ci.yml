@@ -29,7 +29,7 @@ jobs:
         run: python tools/check_package.py
 
   native:
-    name: Native plugin (MSVC, host policy tests)
+    name: Native plugin (MSVC via xmake, policy tests, version block)
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -37,19 +37,22 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - name: vcpkg at the pinned baseline
+      - uses: xmake-io/github-action-setup-xmake@0a1f2a2a09e1a824c6c0e8d7fa9e6f4d2c9e6b5a # v1
+        with:
+          xmake-version: latest
+      - name: Configure and build (CommonLibSSE pin, static CRT)
+        run: |
+          xmake f -p windows -a x64 -m release -y
+          xmake b -y
+      - name: Host policy tests
+        run: ./build/windows/x64/release/policy_tests.exe
+      - name: Shipped version block declares the Address Library v5 contract
         shell: pwsh
         run: |
-          $dir = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          git clone --no-tags https://github.com/microsoft/vcpkg.git $dir
-          git -C $dir checkout 817892b0ecbc6af994dd6df999c73faf795adbf2
-          & "$dir/bootstrap-vcpkg.bat" -disableMetrics
-          "VCPKG_ROOT=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Configure, build, run policy tests
-        shell: pwsh
-        run: ./build.ps1
+          $version = (Select-String -Path xmake.lua -Pattern 'set_version\("([^"]+)"\)').Matches[0].Groups[1].Value
+          python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version $version
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: NemesisCombatAI-dll
-          path: build/Release/NemesisCombatAI.dll
+          path: build/windows/x64/release/NemesisCombatAI.dll
           if-no-files-found: error

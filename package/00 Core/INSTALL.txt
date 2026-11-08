@@ -1,11 +1,14 @@
-Nemesis Combat AI 3.0.0
+Nemesis Combat AI 3.0.1
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
 spells, NFF owns follower commands.
 
 REQUIREMENTS
-  Hard:     SKSE64, Address Library for SKSE Plugins, Microsoft Visual C++ x64 runtime. VR is not supported.
+  Hard:     SKSE64 for your game build, and the Address Library for SKSE Plugins that matches that exact build.
+            Skyrim SE 1.5.97, AE 1.6.x and AE 1.7.99/1.7.104 are supported by the same DLL. For 1.7.99/1.7.104
+            you need Address Library All-in-One v13 or newer (it adds versionlib-1-7-104-0.bin); older builds use
+            v11. No Visual C++ redistributable is needed: the runtime is linked statically. VR is not supported.
   For the tiered combat styles: SkyPatcher.   For the in-game menu: SkyUI + MCM Helper.
   Optional: Dynamic Grip, For Honor In Skyrim BFCO (both detected automatically), KID (only tags weapons and
             armor with keywords that other mods may use; Nemesis itself no longer needs it).
@@ -39,9 +42,12 @@ UNINSTALL
   next load removes. Combat styles and keywords are applied in memory each session.
 
 TROUBLESHOOTING
-  Log: Documents\My Games\Skyrim Special Edition\SKSE\NemesisCombatAI.log. It shows the version, settings read,
-  integrations found, how many casters were graded, and the first verdicts of a session. When reporting a
-  problem, include that file and your SKSE log (skse64.log).
+  Log: Documents\My Games\Skyrim Special Edition\SKSE\NemesisCombatAI.log. It shows the version and game build,
+  settings read, integrations found, how many casters were graded, and the first verdicts of a session. When
+  reporting a problem, include that file and your SKSE log (skse64.log).
+  "REL/ID.h(...): failed to open address library file" or "Unsupported address library format" from this DLL means
+  your Address Library does not match your game build; update it (v13 or newer for 1.7.99/1.7.104). 3.0.1 fixed the
+  version of this error that 3.0.0 caused on 1.7.104.
 
 TESTING STATUS
   Built from source, host-tested and tool-validated. A real-world play session confirmed loading, integrations

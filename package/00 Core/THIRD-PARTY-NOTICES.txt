@@ -1,30 +1,17 @@
 Third-party software statically linked into SKSE/Plugins/NemesisCombatAI.dll
 Nemesis Combat AI itself is by GennyWoo. The libraries below keep their own licences; their notices follow.
 
-CommonLibSSE-NG (CharmedBaryon fork, commit b93280e832f263dbef44e44cbe2936622a02f91a), originally by Ryan-rsm-McKenzie
-https://github.com/CharmedBaryon/CommonLibSSE-NG
+CommonLibSSE (libxse fork, commit 4506c635, with commonlib-shared commit 29fbdb0e), originally by Ryan-rsm-McKenzie
+https://github.com/libxse/commonlibsse
 ------------------------------------------------------------------------
-MIT License
+GNU General Public License v3.0 or later, with the Modding Exception and the GPL-3.0 Linking Exception.
+The full licence text ships as licenses/GPL-3.0.txt and the exceptions as licenses/CommonLibSSE-EXCEPTIONS.txt.
+Nemesis Combat AI's own source is published at https://github.com/SenjuWoo/NemesisCombatAI, which satisfies the
+corresponding-source requirement for this binary.
 
-Copyright (c) 2018 Ryan-rsm-McKenzie
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Modding Exception (summary of the shipped text): the Modded Code (Skyrim) and Modding Libraries (SKSE) that
+this library is linked with are not covered by the GPL, and the combined work may be distributed under those
+terms; the Program code itself stays under the GPL.
 
 
 spdlog

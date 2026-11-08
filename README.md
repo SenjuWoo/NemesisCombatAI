@@ -28,7 +28,7 @@ The mod is distributed on [Nexus Mods](https://www.nexusmods.com/skyrimspecialed
 
 ## Requirements
 
-SKSE64, Address Library for SKSE Plugins, Microsoft Visual C++ x64 runtime, SkyPatcher (styles), SkyUI and MCM Helper (menu). Dynamic Grip, For Honor In Skyrim BFCO and NPC Spell Variance are optional and detected automatically. Skyrim SE/AE only; VR is not supported.
+SKSE64 and the Address Library for SKSE Plugins, both matching your game build: Skyrim SE 1.5.97, AE 1.6.x and AE 1.7.99/1.7.104 all work with the same DLL, and 1.7.99/1.7.104 need Address Library All-in-One v13 or newer. The plugin links the C runtime statically, so the Visual C++ redistributable is not required. SkyPatcher is needed for the tiered styles, SkyUI and MCM Helper for the menu. Dynamic Grip, For Honor In Skyrim BFCO and NPC Spell Variance are optional and detected automatically. Skyrim SE/AE only; VR is not supported.
 
 ## Settings
 
@@ -40,28 +40,26 @@ In game: Mod Configuration Menu, Nemesis Combat AI. Files: `Data/SKSE/Plugins/Ne
 |---|---|
 | `src/` | Plugin source. `Policy.h` is the pure rating/morale policy, `main.cpp` the SKSE runtime, `StyleIds.h` is generated. |
 | `tests/` | Host tests of the policy (no Skyrim needed). |
-| `tools/` | `make_styles_esp.py` generates the styles plugin, its SkyPatcher INI and `StyleIds.h` from one table; `check_package.py` verifies them; `make_release_zip.py` builds the release archive. |
-| `package/` | Everything that ships except the DLL: plugins, MCM config, scripts, INIs, FOMOD. |
-| `extern/commonlibsse-ng` | CommonLibSSE-NG, pinned by submodule. |
+| `tools/` | `make_styles_esp.py` generates the styles plugin, its SkyPatcher INI and `StyleIds.h` from one table; `check_package.py` verifies them; `make_release_zip.py` builds the release archive; `verify_version_block.py` reads the SKSE version block out of a built DLL (the Address Library contract). |
+| `package/` | Everything that ships except the DLL: plugins, MCM config, scripts, INIs, FOMOD, licences. |
+| `extern/commonlibsse` | CommonLibSSE (libxse fork), pinned by submodule; it covers game builds 1.5.97 through 1.7.104 and reads Address Library formats 1-2 and 5. |
 
 ## Building
 
-Requirements: Visual Studio 2026 with the C++ x64 workload and Windows SDK (what CI and the release build use; pass `-Generator 'Visual Studio 17 2022'` for 2022, which is untested), CMake 3.25+, Git, Python 3.
+Requirements: Visual Studio 2026 with the C++ x64 workload and Windows SDK, xmake 3.0+, Git, Python 3.
 
 ```powershell
 git clone --recurse-submodules https://github.com/SenjuWoo/NemesisCombatAI
-# vcpkg at the pinned baseline (see DEPENDENCIES.md), bootstrapped:
-git clone https://github.com/microsoft/vcpkg C:\vcpkg
-git -C C:\vcpkg checkout 817892b0ecbc6af994dd6df999c73faf795adbf2
-C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
 cd NemesisCombatAI
-./build.ps1 -VcpkgRoot C:\vcpkg   # builds, then runs the policy tests
+xmake f -p windows -a x64 -m release -y
+xmake b -y                                    # plugin and host policy tests
+./build/windows/x64/release/policy_tests.exe
+python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.1
 python tools/check_package.py
-python tools/make_release_zip.py build/Release/NemesisCombatAI.dll NemesisCombatAI.zip
+python tools/make_release_zip.py . ../NemesisCombatAI.zip
 ```
 
-The build never deploys anything to your game. Local builds trim the source folder out of embedded `__FILE__` strings, so a build from any checkout location contains no personal paths.
+The plugin is linked with the static C runtime, so it does not need the Visual C++ redistributable. The build never deploys anything to your game.
 
 ## Status
 
