@@ -4,7 +4,7 @@
 Why this exists: the reachable game versions and the Address Library flags live only in that struct. A build
 that silently loses the AddressLibraryV5 bit loads on 1.7.x and then dies inside the address library reader
 (REL/ID.h), which is exactly the 3.0.0 failure users reported. This checks the shipped bytes, not the source.
-Usage: python tools/verify_version_block.py <dll> [--expect-version 3.0.1]
+Usage: python tools/verify_version_block.py <dll> [--expect-version 3.0.2]
 Exit code 0 = every expectation met; 1 = mismatch; 2 = could not read.
 """
 import struct

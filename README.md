@@ -54,7 +54,7 @@ cd NemesisCombatAI
 xmake f -p windows -a x64 -m release -y
 xmake b -y                                    # plugin and host policy tests
 ./build/windows/x64/release/policy_tests.exe
-python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.1
+python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.2
 python tools/check_package.py
 python tools/make_release_zip.py . ../NemesisCombatAI.zip
 ```
