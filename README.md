@@ -6,6 +6,8 @@
 
 # Nemesis Combat AI
 
+> **Beta build (3.0.5).** Loads and initialises on Skyrim AE 1.6.1170; the morale shift has not yet been read back in a played fight, and 1.7.x is declared-only. Treat it as a test build, not a stable release.
+
 <p>
   <a href="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml"><img src="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8C3A32?labelColor=0d1117" alt="MIT License"></a>

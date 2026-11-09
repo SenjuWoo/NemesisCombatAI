@@ -1,6 +1,8 @@
 # Changelog
 
-## 3.0.5
+## 3.0.5 (beta)
+
+Beta: every static gate and the 1.6.1170 load/init/save-load path pass; live Confidence readback is still outstanding.
 
 - Dynamic Grip ownership moved into one ledger. `ReleaseAll()` now clears the bookkeeping even when this plugin never added a keyword - a base that only holds a For Honor master no longer leaves a stale exclusion behind on a world change or when the option is switched off.
 - Caster grading uses an explicit `GradeState` (`graded` flag + world generation) instead of overloading generation 0 as "never graded". The first world of a process always grades, a failed or skipped pass stays retryable, and `Reset()` is called whenever styles are restored.

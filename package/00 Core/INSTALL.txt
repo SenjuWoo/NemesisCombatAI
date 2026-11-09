@@ -66,6 +66,11 @@ TROUBLESHOOTING
   your Address Library does not match your game build; update it (v13 or newer for 1.7.99/1.7.104). 3.0.1 is built to
   fix the version of this error that 3.0.0 threw on 1.7.104; confirmation on 1.7.x is still pending.
 
+BETA BUILD
+  This is a beta. It loads and initialises on Skyrim AE 1.6.1170 and has been through every static check, but the
+  morale shift has not yet been read back in a played fight, and no 1.7.x run exists. Keep a working 2.0.4/3.0.0
+  install to fall back to.
+
 TESTING STATUS
   Built from source, host-tested and tool-validated. Gameplay was played on 3.0.0 (loading, integrations, caster
   grading and morale in a bandit fight). 3.0.3/3.0.4 were load-tested on Skyrim AE 1.6.1170 (load, ready, save load,
