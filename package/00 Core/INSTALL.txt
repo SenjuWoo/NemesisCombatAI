@@ -59,6 +59,9 @@ TROUBLESHOOTING
   reporting a problem, include that file and your SKSE log (skse64.log).
   "Skyrim 1.5.97 uses the pre-1.6.629 structure layout" in the log: you are on Skyrim SE 1.5.97, which this build
   does not support. Update to AE 1.6.629 or newer, or stay on Nemesis Combat AI 2.0.4.
+  Game appears to hang at startup with no window: check for a small "Cache Recursive Directory Walk" dialog asking
+  whether to regenerate CRDW cache files. Answer No unless you just changed files in Data. The dialog sits behind the game
+  window and blocks loading until it is answered. This is CRDW's own prompt, not this mod.
   "REL/ID.h(...): failed to open address library file" or "Unsupported address library format" from this DLL means
   your Address Library does not match your game build; update it (v13 or newer for 1.7.99/1.7.104). 3.0.1 is built to
   fix the version of this error that 3.0.0 threw on 1.7.104; confirmation on 1.7.x is still pending.
