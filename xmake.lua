@@ -12,13 +12,15 @@ add_ldflags("/Brepro", { force = true })
 includes("extern/commonlibsse")
 
 set_project("NemesisCombatAI")
-set_version("3.0.5")
+set_version("3.0.6")
 set_license("MIT")
 set_languages("c++23")
 set_warnings("allextra")
 set_arch("x64")
 
-add_rules("mode.releasedbg")
+-- "xmake f -m release" must match a mode rule: without mode.release the build silently got no /O2 and no NDEBUG
+-- (3.0.1-3.0.5 shipped unoptimised).
+add_rules("mode.release", "mode.releasedbg")
 
 -- The mod itself. The commonlibsse.plugin rule generates the SKSE version block from the options below.
 -- address_library: engine IDs come from the Address Library, never from fixed exe offsets.
@@ -39,9 +41,16 @@ target("NemesisCombatAI")
     add_includedirs("src")
     add_defines("NOMINMAX", "WIN32_LEAN_AND_MEAN")
 
--- Policy checks run without Skyrim. Assertions must stay on in the release build.
+-- Policy checks run without Skyrim. The test file undefines NDEBUG itself so its assertions survive any mode.
 target("policy_tests")
     set_kind("binary")
     add_files("tests/policy_tests.cpp")
     add_includedirs("src")
-    add_cxxflags("/UNDEBUG", { force = true })
+
+-- Same file with one assertion that is false on purpose. CI runs it and requires a failure, which proves the
+-- assertions in policy_tests are really compiled in.
+target("policy_selftest")
+    set_kind("binary")
+    add_files("tests/policy_tests.cpp")
+    add_includedirs("src")
+    add_defines("NCAI_SELFTEST_FAIL")

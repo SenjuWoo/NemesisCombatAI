@@ -14,4 +14,6 @@ namespace NCAI::Styles
         { 0x81B, 0x81C },
         { 0x81D, 0x81E }
     };
+    // Local FormIDs in kPlugin of the boss styles SkyPatcher hands out in place of csHumanBoss1H/2H
+    inline constexpr std::uint32_t kBossStyles[] = { 0x814, 0x815, 0x816 };
 }

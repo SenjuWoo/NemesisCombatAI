@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
-  <moduleName>Nemesis Combat AI 3.0.5</moduleName>
+  <moduleName>Nemesis Combat AI 3.0.6</moduleName>
   <requiredInstallFiles>
     <folder source="00 Core" destination="" priority="0" />
   </requiredInstallFiles>
@@ -18,8 +18,8 @@
                 <type name="Recommended" />
               </typeDescriptor>
             </plugin>
-            <plugin name="Morale only (no combat style changes)">
-              <description>Installs only the native morale layer: NPC nerve, rout, last stand. Leaves every combat style as vanilla or as another mod set it.</description>
+            <plugin name="Morale only (no tiered combat styles)">
+              <description>Installs the native morale layer (NPC nerve, rout, last stand) without the tiered combat styles. The small faction style pools from 2.x stay: Thalmor, Vampires, Dremora, Warlocks, Necromancers and Silver Hand pick from themed vanilla styles through SkyPatcher. Every other combat style is left as vanilla or as another mod set it.</description>
               <conditionFlags>
                 <flag name="MoraleOnly">On</flag>
               </conditionFlags>

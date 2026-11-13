@@ -1,6 +1,3 @@
-[submodule "extern/commonlibsse-ng"]
-	path = extern/commonlibsse-ng
-	url = https://github.com/CharmedBaryon/CommonLibSSE-NG
 [submodule "extern/commonlibsse"]
 	path = extern/commonlibsse
 	url = https://github.com/libxse/commonlibsse

@@ -39,13 +39,19 @@ jobs:
           persist-credentials: false
       - uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
         with:
-          xmake-version: latest
+          xmake-version: '3.1.2'
       - name: Configure and build (CommonLibSSE pin, static CRT)
         run: |
           xmake f -p windows -a x64 -m release -y
           xmake b -y
       - name: Host policy tests
         run: ./build/windows/x64/release/policy_tests.exe
+      - name: Assertions are live (the self-test build must fail)
+        shell: pwsh
+        run: |
+          ./build/windows/x64/release/policy_selftest.exe
+          if ($LASTEXITCODE -eq 0) { throw 'policy_selftest passed: assertions are compiled out, the policy tests prove nothing' }
+          exit 0
       - name: Shipped version block declares the Address Library v5 contract
         shell: pwsh
         run: |

@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.0.6 (beta)
+
+Audit release. Static gates pass; this binary has not been run in game yet.
+
+- **For Honor masters keep their Dynamic Grip exclusion when `GripTiers` is off.** Since 3.0.3 the first evaluation of any fighter released every keyword this plugin owned, masters included, whenever the grip option was not installed. The decision is now one tested rule: a master is always blocked, everyone else only while the option is on.
+- **Boss bonus works with the tiered styles.** Bosses were recognised only by the two vanilla boss styles, which SkyPatcher has already swapped for the Nemesis boss pool in a Full tactics install. The plugin now also recognises its own boss styles (ids generated from the same table as the plugin).
+- **Fear and rally effects are left alone.** The authored Confidence is read from the permanent value, so a temporary effect is no longer mistaken for the authored value and partly cancelled by the morale shift.
+- **Optimised binary.** `xmake f -m release` matched no mode rule, so 3.0.1-3.0.5 were compiled without optimisation and with assertions. The build now applies the release mode (DLL about half the size).
+- A shift stored in a save is taken back before the first evaluation after loading, not after it.
+- Settings files: a UTF-8 byte-order mark is accepted, unknown keys and values that are not 0/1/true/false are reported in the log, and `Debug=1` logs every verdict and release. The first releases of a session are now logged like the first verdicts.
+- Documentation: uninstall instructions now say what is true (load a save made out of combat, or let the plugin clean it once, before removing the mod); the co-save is described as version 2; the Morale only installer option names the faction style pools it keeps.
+- Build and CI: host tests keep their assertions in every build mode and CI proves they can fail; the package check compares version strings across the build file, installer and docs; xmake is pinned in CI.
+
 ## 3.0.5 (beta)
 
 Beta: every static gate and the 1.6.1170 load/init/save-load path pass; live Confidence readback is still outstanding.

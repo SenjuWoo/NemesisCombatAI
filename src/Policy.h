@@ -85,6 +85,13 @@ namespace NCAI
         return !master && tier >= Tier::Trained && doctrine != Doctrine::Caster;
     }
 
+    // Whether an NPC's base should carry Dynamic Grip's blacklist keyword. A For Honor master always does, whatever
+    // the grip option says; everyone else only while the option is on and they are not schooled.
+    inline bool GripBlockWanted(bool tiersOn, Tier tier, Doctrine doctrine, bool master)
+    {
+        return master || (tiersOn && !GripSchooled(tier, doctrine, master));
+    }
+
     // Which of a pool's two styles an NPC gets: stable per NPC so a save always sees the same fighter.
     inline unsigned PoolSlot(unsigned formId)
     {
@@ -172,7 +179,9 @@ namespace NCAI
     // The delta a release applies to take our permanent change back off again.
     [[nodiscard]] constexpr float RevertDelta(float a_applied) noexcept { return -a_applied; }
 
-    // Authored confidence as seen through our own applied delta.
+    // Authored confidence as seen through our own applied delta. Feed it the PERMANENT value (base + permanent
+    // modifiers): temporary effects such as fear or rally sit on top and must neither be mistaken for the authored
+    // value nor be cancelled by our shift.
     [[nodiscard]] constexpr float AuthoredBase(float a_current, float a_applied) noexcept { return a_current - a_applied; }
 
     // Confidence stays on the engine's authored scale.

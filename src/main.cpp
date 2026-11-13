@@ -22,6 +22,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 using namespace std::literals;
@@ -70,6 +71,7 @@ namespace
     {
         bool casterTiers = true;   // regrade pure-caster combat styles by level (needs NemesisCombatAI_Styles.esp)
         bool gripTiers = false;    // Dynamic Grip only for schooled fighters (For Honor masters are always excluded)
+        bool debug = false;        // Debug=1: every verdict and release goes to the log, not only the first 25
         std::vector<std::pair<std::string, RE::FormID>> extraCasterStyles;  // CasterStyle=Plugin.esp|HexFormID
     } g_cfg;
 
@@ -117,8 +119,9 @@ namespace
         { 0x1BCC0, Doctrine::Bandit, 3 },   // BanditFaction
         { 0xAA0A4, Doctrine::Bandit, 3 },   // SilverHandFaction
     };
-    constexpr RE::FormID kBossStyle1H = 0x3DECE;  // csHumanBoss1H
-    constexpr RE::FormID kBossStyle2H = 0x3DECF;  // csHumanBoss2H
+    // csHumanBoss1H / csHumanBoss2H plus, once resolved, the Nemesis boss pool that SkyPatcher swaps them for:
+    // with the tiered styles installed no boss still carries a vanilla boss style when a fight starts.
+    std::unordered_set<RE::FormID> g_bossStyles{ 0x3DECE, 0x3DECF };
     constexpr std::string_view kTitles[] = { "Boss", "Chief", "Champion", "Warlord", "Commander", "General", "Jarl",
         "Captain", "Master", "Veteran", "Thane", "Lord", "King", "Queen", "Leader" };
 
@@ -160,17 +163,31 @@ namespace
         if (files.empty()) spdlog::info("config: no ini files in {} (defaults apply)", dir.string());
         for (const auto& file : files) {
             std::ifstream in{ file };
-            std::string line;
-            while (std::getline(in, line)) {
+            std::string raw;
+            bool first = true;
+            while (std::getline(in, raw)) {
+                if (std::exchange(first, false) && raw.starts_with("\xEF\xBB\xBF")) raw.erase(0, 3);  // UTF-8 BOM from some editors
+                const std::string line = Trim(raw);
                 const auto eq = line.find('=');
-                if (eq == std::string::npos || line.starts_with(';') || line.starts_with('#')) continue;
+                if (line.empty() || line.starts_with(';') || line.starts_with('#') || line.starts_with('[')) continue;
+                if (eq == std::string::npos) {
+                    spdlog::warn("{}: ignoring line '{}' (expected Key=Value)", file.filename().string(), line);
+                    continue;
+                }
                 const std::string key = Lower(Trim(std::string_view{ line }.substr(0, eq)));
                 const std::string value = Trim(std::string_view{ line }.substr(eq + 1));
-                const bool on = value == "1" || Lower(value) == "true";
+                const std::string flag = Lower(value);
+                const bool on = flag == "1" || flag == "true";
+                const bool isSwitch = key == "castertiers" || key == "griptiers" || key == "debug";
+                if (isSwitch && !on && flag != "0" && flag != "false") {
+                    spdlog::warn("{}: {}='{}' is not 0/1/true/false, read as off", file.filename().string(), key, value);
+                }
                 if (key == "castertiers") {
                     g_cfg.casterTiers = on;
                 } else if (key == "griptiers") {
                     g_cfg.gripTiers = on;
+                } else if (key == "debug") {
+                    g_cfg.debug = on;
                 } else if (key == "casterstyle") {
                     const auto bar = value.find('|');
                     const auto id = bar == std::string::npos ? 0UL : std::strtoul(value.c_str() + bar + 1, nullptr, 16);
@@ -179,11 +196,17 @@ namespace
                     } else {
                         spdlog::warn("{}: ignoring CasterStyle '{}' (expected Plugin.esp|HexFormID)", file.filename().string(), value);
                     }
+                } else {
+                    spdlog::warn("{}: unknown setting '{}' ignored", file.filename().string(), key);
                 }
             }
             spdlog::info("config: read {}", file.filename().string());
         }
-        spdlog::info("config: casterTiers={} gripTiers={} extraCasterStyles={}", g_cfg.casterTiers, g_cfg.gripTiers, g_cfg.extraCasterStyles.size());
+        if (g_cfg.debug) {
+            spdlog::default_logger()->set_level(spdlog::level::debug);
+            spdlog::default_logger()->flush_on(spdlog::level::debug);
+        }
+        spdlog::info("config: casterTiers={} gripTiers={} debug={} extraCasterStyles={}", g_cfg.casterTiers, g_cfg.gripTiers, g_cfg.debug, g_cfg.extraCasterStyles.size());
     }
 
     float Value(const RE::TESGlobal* g, float fallback)
@@ -233,7 +256,7 @@ namespace
         if (const auto base = actor->GetActorBase()) {
             p.unique = base->IsUnique();
             if (const auto style = base->GetCombatStyle()) {
-                p.boss = style->GetFormID() == kBossStyle1H || style->GetFormID() == kBossStyle2H;
+                p.boss = g_bossStyles.contains(style->GetFormID());
             }
         }
         if (const char* name = actor->GetName()) {
@@ -292,12 +315,20 @@ namespace
         add(RE::ActorValue::kSpeedMult, d.speed);
     }
 
+    // The first verdicts and releases of a session go to the info log as test evidence; later ones stay at debug
+    // (Debug=1 in NemesisCombatAI.d shows them all).
+    spdlog::level::level_enum EvidenceLevel()
+    {
+        static std::atomic<int> logged{ 0 };
+        return logged++ < 25 ? spdlog::level::info : spdlog::level::debug;
+    }
+
     void Release(RE::FormID id, RE::Actor* actor, Tracked& t)
     {
         if (actor && t.applied != 0.0F) {
             ApplyDelta(actor, { 0.0F, -t.applied, 0.0F, 0.0F });
-            spdlog::debug("{:08X} released ({:+.2f}) av={:.2f}", id, -t.applied,
-                actor ? actor->GetActorValue(RE::ActorValue::kConfidence) : 0.0F);
+            spdlog::log(EvidenceLevel(), "{:08X} released ({:+.2f}) av={:.2f}", id, -t.applied,
+                actor->GetActorValue(RE::ActorValue::kConfidence));
         }
         t.applied = 0.0F;
     }
@@ -424,24 +455,24 @@ namespace
         }
 
         const Mind mind = Think(profile, sit);
-        if (g_cfg.gripTiers) {
-            SetGripBlock(actor, !GripSchooled(mind.tier, profile.doctrine, profile.master),
-                std::format("tier {} intellect {:.2f}", static_cast<int>(mind.tier), mind.intellect));
-        } else if (!g_grip.blocked.empty()) {
-            ReleaseGripBlocks("grip option off"sv);   // the option was switched off: hand the keywords back
+        // One decision for both cases. The settings files are read once at startup, so there is no "option switched
+        // off" moment to react to here; releasing on that guess is what stripped For Honor masters in 3.0.3-3.0.5.
+        if (g_int.gripBlock && (g_cfg.gripTiers || profile.master)) {
+            SetGripBlock(actor, GripBlockWanted(g_cfg.gripTiers, mind.tier, profile.doctrine, profile.master),
+                profile.master ? "For Honor master"s : std::format("tier {} intellect {:.2f}", static_cast<int>(mind.tier), mind.intellect),
+                profile.master);
         }
         t.lastStand = mind.lastStand;
         t.next = now + kEvalCooldown;
 
-        // Authored Confidence is the baseline; keep the final value inside the engine's 0..4 scale.
-        const float base = AuthoredBase(actor->GetActorValue(RE::ActorValue::kConfidence), t.applied);
+        // Authored Confidence is the baseline; keep the final value inside the engine's 0..4 scale. The permanent
+        // value is used so a fear or rally effect (a temporary modifier) is neither read as authored nor cancelled.
+        const float base = AuthoredBase(actor->GetPermanentActorValue(RE::ActorValue::kConfidence), t.applied);
         const float wanted = ClampConfidence(base + mind.confidenceShift) - base;
         if (std::fabs(wanted - t.applied) >= 0.5F || (wanted == 0.0F && t.applied != 0.0F)) {
             ApplyDelta(actor, { 0.0F, wanted - t.applied, 0.0F, 0.0F });
-            // The first verdicts of a session go to the info log as test evidence; later ones stay at debug.
-            static std::atomic<int> logged{ 0 };
             // av/base are the engine's own Confidence numbers, so a report shows the applied value, not just intent.
-            spdlog::log(logged++ < 25 ? spdlog::level::info : spdlog::level::debug,
+            spdlog::log(EvidenceLevel(),
                 "{:08X} tier={} intellect={:.2f} allies={} foes={} casualties={} shift {:+.2f} -> {:+.2f} av={:.2f} base={:.2f}", id,
                 static_cast<int>(mind.tier), mind.intellect, sit.allies, sit.foes, sit.casualties, t.applied, wanted,
                 actor->GetActorValue(RE::ActorValue::kConfidence), base);
@@ -468,10 +499,16 @@ namespace
             }
         }
 
+    }
+
+    // Take back what a save still carried. Runs before any evaluation, so a verdict never measures an actor whose
+    // saved shift is still on it.
+    void DrainPending()
+    {
         for (auto it = g_pending.begin(); it != g_pending.end();) {
             if (const auto actor = ActorById(it->first)) {
                 ApplyDelta(actor, { -it->second.aggression, -it->second.confidence, -it->second.attack, -it->second.speed });
-                spdlog::info("co-save: restored legacy deltas on {:08X}", it->first);
+                spdlog::info("co-save: took the saved shift back off {:08X}", it->first);
                 it = g_pending.erase(it);
             } else {
                 ++it;
@@ -517,6 +554,7 @@ namespace
         SKSE::GetTaskInterface()->AddTask([gen, work = std::forward<F>(work)] {
             if (gen != g_generation.load()) return;  // world changed since the event fired
             const Settings s = ReadSettings();
+            if (!g_pending.empty()) DrainPending();
             work(s);
             Sweep(s);
         });
@@ -608,6 +646,9 @@ namespace
         g_forms.potentialFollower = RE::TESForm::LookupByID<RE::TESFaction>(0x5C84D);
         g_int.masterPerk = data->LookupForm<RE::BGSPerk>(0xD7B, "ForHonorBFCO.esp");
         g_int.gripBlock = data->LookupForm<RE::BGSKeyword>(0x815, "DynamicGrip.esp");
+        for (const auto local : Styles::kBossStyles) {
+            if (const auto style = data->LookupForm<RE::TESCombatStyle>(local, Styles::kPlugin)) g_bossStyles.insert(style->GetFormID());
+        }
         spdlog::info("integrations: For Honor master perk {}, Dynamic Grip blacklist {}", g_int.masterPerk ? "found" : "absent",
             g_int.gripBlock ? "found" : "absent");
         return g_forms.enabled != nullptr;  // without the master toggle the layer stays off

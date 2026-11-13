@@ -1,4 +1,6 @@
-// Host checks for the combat-mind policy; asserts stay active in release builds (/UNDEBUG).
+// Host checks for the combat-mind policy. The release mode defines NDEBUG, which would compile every assert below
+// out and leave a test that always passes, so it is undefined here, in the file, where no build flag can undo it.
+#undef NDEBUG
 #include "Policy.h"
 
 #include <cassert>
@@ -78,6 +80,27 @@ int main()
     assert(Think(master, {}).confidenceShift > Think(Grunt(), {}).confidenceShift);
     assert(!GripSchooled(Think(master, {}).tier, master.doctrine, master.master));
     assert(GripSchooled(Think(Legend(), {}).tier, Doctrine::Military, false));
+
+    // A For Honor master is blocked from Dynamic Grip whether or not the grip option is on (3.0.3-3.0.5 released
+    // the master's keyword again as soon as the option was off).
+    assert(GripBlockWanted(false, Tier::Elite, Doctrine::Bandit, true));
+    assert(GripBlockWanted(true, Tier::Elite, Doctrine::Bandit, true));
+    // Option off: nobody else is blocked. Option on: only the unschooled and casters are.
+    assert(!GripBlockWanted(false, Tier::Rabble, Doctrine::Bandit, false));
+    assert(GripBlockWanted(true, Tier::Rabble, Doctrine::Bandit, false));
+    assert(!GripBlockWanted(true, Tier::Trained, Doctrine::Bandit, false));
+    assert(GripBlockWanted(true, Tier::Elite, Doctrine::Caster, false));
+
+    // A temporary effect on top of the permanent value changes neither the authored base nor the wanted shift.
+    {
+        const float authored = 3.0F, applied = 1.0F, fear = -4.0F;
+        const float permanent = authored + applied;           // what GetPermanentActorValue reports
+        const float current = permanent + fear;               // what GetActorValue reports while feared
+        assert(std::fabs(AuthoredBase(permanent, applied) - authored) < 1e-5F);
+        assert(AuthoredBase(current, applied) < 0.0F);        // the old reading: a base that never existed
+        const float base = AuthoredBase(permanent, applied);
+        assert(std::fabs((ClampConfidence(base + 1.0F) - base) - applied) < 1e-5F);  // no extra write under fear
+    }
 
     // Dynamic Grip is for schooled non-casters only.
     assert(!GripSchooled(Tier::Rabble, Doctrine::Bandit, false));
@@ -218,6 +241,9 @@ int main()
     assert(!OwnsKeyword(true, false));   // another mod or the console removed it
     assert(!OwnsKeyword(false, true));   // a foreign keyword we never added
 
+#ifdef NCAI_SELFTEST_FAIL
+    assert(false && "self-test: assertions are live");
+#endif
     std::puts("policy_tests passed");
     return 0;
 }
