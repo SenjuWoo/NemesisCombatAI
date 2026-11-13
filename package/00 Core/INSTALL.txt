@@ -1,4 +1,4 @@
-Nemesis Combat AI 3.0.8
+Nemesis Combat AI 3.0.9
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
@@ -39,6 +39,8 @@ WHAT IT DOES
   installed, kept out of Dynamic Grip so their For Honor movesets are not replaced.
   Dynamic Grip option: only Trained-or-better fighters (never casters) switch grips in combat.
   Animals, followers, teammates, essential actors and named uniques are skipped by default (MCM toggles).
+  Creatures (Falmer, giants, spriggans ...) never rout, and the undead (not vampires), daedra and Dwarven constructs
+  never lose their nerve, whatever faction they are in. A leader still standing holds a losing band together.
 
 SETTINGS
   In game: Mod Configuration Menu > Nemesis Combat AI.
@@ -78,8 +80,9 @@ TESTING STATUS
   Built from source, host-tested and tool-validated. 3.0.7 was started on Skyrim AE 1.6.1170 with SKSE 2.2.8 and a
   333-plugin load order: it loaded, read its settings, found For Honor and Dynamic Grip, graded casters, went through
   a save load and excluded a For Honor master from Dynamic Grip, with no error line and no crash. 3.0.8 changes only
-  when an enemy may run away; its rules are covered by host tests (including a sweep of 233,280 fighter/fight
-  combinations) but it has not been started in the game. Gameplay was last played on 3.0.0.
+  when an enemy may run away, and 3.0.9 adds race-aware doctrine, the leader rule and lighter event handling; both
+  are covered by host tests (including a sweep of 233,280 fighter/fight combinations) but have not been started in
+  the game. Gameplay was last played on 3.0.0.
   Still open: the Confidence value has not been read back in a played fight since 3.0.0, and no run on 1.7.99 or
   1.7.104 exists (those builds are declared, not tested). Long sessions, huge battles and every mod combination are
   untested. Keep the previous version's archive so you can go back, and report anything odd with the two logs.

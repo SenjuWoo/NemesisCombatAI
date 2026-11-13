@@ -376,6 +376,71 @@ int main()
         assert(!ParseFleeing("sometimes") && !ParseFleeing(""));
     }
 
+    // ---- 3.0.9: creatures, race doctrine, leaders holding the line, titles, hit filter ----
+    {
+        // Race data: Draugr and skeletons are undead creatures, Dwarven constructs are their own kind, atronachs are
+        // daedric creatures; none of them knows fear, whatever faction they are in.
+        RaceTraits skeleton{ false, true, false, false, false };
+        RaceTraits sphere{ false, false, false, true, false };
+        RaceTraits atronach{ false, false, true, false, false };
+        RaceTraits nordVampire{ true, true, false, false, true };
+        RaceTraits dremora{ true, false, true, false, false };
+        RaceTraits falmer{ false, false, false, false, false };
+        RaceTraits nord{};
+        assert(RaceDoctrine(Doctrine::Neutral, skeleton) == Doctrine::Undead);
+        assert(RaceDoctrine(Doctrine::Caster, skeleton) == Doctrine::Undead);
+        assert(RaceDoctrine(Doctrine::Neutral, sphere) == Doctrine::Construct && Fearless(Doctrine::Construct));
+        assert(RaceDoctrine(Doctrine::Neutral, atronach) == Doctrine::Daedra);
+        assert(RaceDoctrine(Doctrine::Neutral, nordVampire) == Doctrine::Vampire);     // a vampire is not a skeleton
+        assert(RaceDoctrine(Doctrine::Bandit, nordVampire) == Doctrine::Bandit);       // a known faction wins
+        assert(RaceDoctrine(Doctrine::Neutral, dremora) == Doctrine::Daedra);
+        assert(RaceDoctrine(Doctrine::Military, dremora) == Doctrine::Military);
+        assert(RaceDoctrine(Doctrine::Bandit, falmer) == Doctrine::Bandit);
+        assert(RaceDoctrine(Doctrine::Bandit, nord) == Doctrine::Bandit);
+
+        Situation broke;
+        broke.allies = 1;
+        broke.leaderDown = true;
+        Profile undeadGrunt = Grunt();
+        undeadGrunt.doctrine = RaceDoctrine(Doctrine::Neutral, skeleton);
+        undeadGrunt.person = false;
+        assert(!Think(undeadGrunt, broke).routed && Think(undeadGrunt, broke).confidenceShift >= 1.0F);
+        Profile creature = Grunt();
+        creature.person = false;                                  // Falmer, giants, spriggans: no rout
+        assert(!Think(creature, broke).routed);
+        assert(Think(Grunt(), broke).routed);                     // the same fight breaks a band of people
+
+        // A leader still standing beside them holds a losing band; once the leader falls, it breaks.
+        Situation losing;
+        losing.allies = 1;
+        losing.casualties = 3;
+        assert(Think(Grunt(), losing).routed);
+        losing.leaderNear = true;
+        assert(!Think(Grunt(), losing).routed);
+        losing.leaderDown = true;                                 // a second, stronger friend fell
+        assert(Think(Grunt(), losing).routed);
+    }
+    {
+        assert(HasTitle("Bandit Chief") && HasTitle("Orc Chieftain") && HasTitle("Jarl Balgruuf the Greater"));
+        assert(HasTitle("Captain Aldis") && HasTitle("Master Vampire") && HasTitle("Bandit Leader"));
+        assert(HasTitle("Lord Harkon") && HasTitle("King-Slayer"));       // a hyphen is a word boundary
+        assert(!HasTitle("Viking") && !HasTitle("Kingsley") && !HasTitle("Lordly Merchant") && !HasTitle("Bossy"));
+        assert(!HasTitle("Bandit Marauder") && !HasTitle("") && !HasTitle("Masterwork Smith"));
+    }
+    {
+        IdMirror<4> mirror;
+        assert(!mirror.Contains(0x14) && !mirror.Add(0));
+        assert(mirror.Add(0x14) && mirror.Contains(0x14));
+        assert(mirror.Add(0x14));                                 // a second add is a no-op, not a second slot
+        assert(mirror.Add(0x15) && mirror.Add(0x16) && mirror.Add(0x17));
+        assert(!mirror.Add(0x18) && !mirror.Contains(0x18));      // full: refused, and says so
+        mirror.Remove(0x15);
+        assert(!mirror.Contains(0x15) && mirror.Add(0x18) && mirror.Contains(0x18));
+        mirror.Clear();
+        assert(!mirror.Contains(0x14) && !mirror.Contains(0x18));
+        mirror.Remove(0x99);                                      // removing a stranger is harmless
+    }
+
 #ifdef NCAI_SELFTEST_FAIL
     assert(false && "self-test: assertions are live");
 #endif

@@ -3,6 +3,9 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
+#include <atomic>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <optional>
@@ -12,7 +15,7 @@
 
 namespace NCAI
 {
-    enum class Doctrine { Neutral, Military, Bandit, Forsworn, Thalmor, Vampire, Daedra, Undead, Caster };
+    enum class Doctrine { Neutral, Military, Bandit, Forsworn, Thalmor, Vampire, Daedra, Undead, Caster, Construct };
     enum class Tier { Rabble, Trained, Veteran, Elite };
 
     struct Profile
@@ -26,6 +29,90 @@ namespace NCAI
         bool titled = false; // name carries a leader title (Captain, Chief, Jarl ...)
         bool boss = false;   // uses a vanilla boss combat style
         bool master = false; // For Honor picked this fighter as a weapon master (it carries FH's perk)
+        bool person = true;  // race carries ActorTypeNPC; creatures (Falmer, giants, spriggans ...) never rout
+    };
+
+    // What the race says about a fighter. Draugr, skeletons, Falmer, giants, atronachs and Dwarven constructs are
+    // creatures in the race data (no ActorTypeNPC), and most of them belong to no faction the doctrine table knows.
+    struct RaceTraits
+    {
+        bool person = true;     // ActorTypeNPC
+        bool undead = false;    // ActorTypeUndead
+        bool daedra = false;    // ActorTypeDaedra
+        bool construct = false; // ActorTypeDwarven
+        bool vampire = false;   // Vampire
+    };
+
+    // The dead, the daedric and the mechanical do not know fear, whatever faction they are in; a vampire or a dremora
+    // without a known faction still fights like one. Otherwise the faction decides.
+    [[nodiscard]] constexpr Doctrine RaceDoctrine(Doctrine a_fromFactions, const RaceTraits& a_race) noexcept
+    {
+        if (a_race.construct) return Doctrine::Construct;
+        if (a_race.undead && !a_race.vampire) return Doctrine::Undead;   // skeletons, ghosts, Draugr, ash spawn
+        if (a_race.daedra && !a_race.person) return Doctrine::Daedra;    // atronachs and other daedric creatures
+        if (a_fromFactions == Doctrine::Neutral) {
+            if (a_race.vampire) return Doctrine::Vampire;
+            if (a_race.daedra) return Doctrine::Daedra;
+        }
+        return a_fromFactions;
+    }
+
+    // Leader titles, matched as whole words so "King" never matches inside another name.
+    inline constexpr std::string_view kTitles[] = { "Boss", "Chief", "Chieftain", "Champion", "Warlord", "Commander",
+        "General", "Jarl", "Captain", "Master", "Veteran", "Thane", "Lord", "King", "Queen", "Leader" };
+
+    [[nodiscard]] inline bool HasTitle(std::string_view a_name) noexcept
+    {
+        const auto letter = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
+        for (const auto title : kTitles) {
+            for (auto at = a_name.find(title); at != std::string_view::npos; at = a_name.find(title, at + 1)) {
+                const auto end = at + title.size();
+                if ((at == 0 || !letter(a_name[at - 1])) && (end == a_name.size() || !letter(a_name[end]))) return true;
+            }
+        }
+        return false;
+    }
+
+    // A fixed set of form IDs that the game thread writes and any thread may read without a lock. Event callbacks
+    // use it to drop events about actors nobody tracks before they cost a queued task.
+    template <std::size_t N>
+    class IdMirror
+    {
+    public:
+        bool Add(std::uint32_t a_id) noexcept
+        {
+            if (a_id == 0) return false;
+            if (Contains(a_id)) return true;
+            for (auto& slot : slots_) {
+                if (slot.load(std::memory_order_relaxed) == 0) {
+                    slot.store(a_id, std::memory_order_release);
+                    return true;
+                }
+            }
+            return false;
+        }
+        void Remove(std::uint32_t a_id) noexcept
+        {
+            if (a_id == 0) return;
+            for (auto& slot : slots_) {
+                if (slot.load(std::memory_order_relaxed) == a_id) slot.store(0, std::memory_order_release);
+            }
+        }
+        [[nodiscard]] bool Contains(std::uint32_t a_id) const noexcept
+        {
+            if (a_id == 0) return false;
+            for (const auto& slot : slots_) {
+                if (slot.load(std::memory_order_acquire) == a_id) return true;
+            }
+            return false;
+        }
+        void Clear() noexcept
+        {
+            for (auto& slot : slots_) slot.store(0, std::memory_order_release);
+        }
+
+    private:
+        std::array<std::atomic<std::uint32_t>, N> slots_{};
     };
 
     struct Situation
@@ -103,7 +190,7 @@ namespace NCAI
 
     inline bool Fearless(Doctrine d)
     {
-        return d == Doctrine::Undead || d == Doctrine::Daedra;
+        return d == Doctrine::Undead || d == Doctrine::Daedra || d == Doctrine::Construct;
     }
 
     inline Mind Think(const Profile& p, const Situation& s)
@@ -161,9 +248,10 @@ namespace NCAI
         }
 
         // A pack breaks; a lone survivor does not (nobody to run with, and a chase is no fun for the player). Only
-        // untrained fighters rout, and only when their leader fell or they are visibly losing the crowd.
-        mind.routed = s.groupAware && mind.tier == Tier::Rabble && !Fearless(p.doctrine) && s.allies > 0
-            && (s.leaderDown || (s.casualties >= 2 && s.allies < s.casualties));
+        // untrained people rout, and only when their leader fell or they are visibly losing the crowd - and a leader
+        // still standing beside them holds the line: kill the chief to break the band.
+        mind.routed = s.groupAware && p.person && mind.tier == Tier::Rabble && !Fearless(p.doctrine) && s.allies > 0
+            && (s.leaderDown || (!s.leaderNear && s.casualties >= 2 && s.allies < s.casualties));
         if (mind.routed) shift = std::min(shift, -2.5F);
 
         // Experienced fighters turn desperate instead of breaking; the rage ends once they recover.

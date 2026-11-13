@@ -6,7 +6,7 @@
 
 # Nemesis Combat AI
 
-> **3.0.8.** Enemies no longer run away on their own: by default only a pack of untrained fighters can break, and only while someone is still fighting beside them (`Fleeing`, below). Load-tested on Skyrim AE 1.6.1170 up to 3.0.7; 3.0.8 is host-tested, not yet played, and 1.7.x is declared only.
+> **3.0.9.** Enemies run away only when a band of untrained people breaks, and never while their leader still stands; the undead, daedra and Dwarven constructs never lose their nerve. Load-tested on Skyrim AE 1.6.1170 up to 3.0.7; 3.0.8 and 3.0.9 are host-tested, not yet played, and 1.7.x is declared only.
 
 <p>
   <a href="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml"><img src="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -68,20 +68,22 @@ cd NemesisCombatAI
 xmake f -p windows -a x64 -m release -y
 xmake b -y                                    # plugin and host policy tests
 ./build/windows/x64/release/policy_tests.exe
-python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.8
+python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.9
 python tools/check_package.py
-python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.8.zip --expect-version 3.0.8
+python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.9.zip --expect-version 3.0.9
 ```
 
 The plugin is linked with the static C runtime, so it does not need the Visual C++ redistributable. The build never deploys anything to your game.
 
 ## Status
 
-3.0.8 is a gameplay fix: enemies ran away far too often. Vanilla bandits are Foolhardy or Brave, so every flight came from this mod's morale shifts (a high-level player, low health and being outnumbered each pushed untrained fighters toward Cowardly). With the new default only a breaking pack can lower an enemy's nerve, never below Average, and the effect is lifted again after a few seconds. See [CHANGELOG.md](CHANGELOG.md). Crash hardening from 3.0.7 and the 3.0.6 audit fixes are included.
+3.0.9 makes the mind race-aware and lighter. Doctrine also comes from race keywords, so skeletons, Dwarven constructs and atronachs (creatures with no faction the doctrine table knows) are fearless instead of being judged like untrained bandits; creatures never rout; a clearly stronger friend still standing holds a losing band; titles match whole words; and hit events on untracked actors no longer queue work.
+
+3.0.8 was a gameplay fix: enemies ran away far too often. Vanilla bandits are Foolhardy or Brave, so every flight came from this mod's morale shifts (a high-level player, low health and being outnumbered each pushed untrained fighters toward Cowardly). With the new default only a breaking pack can lower an enemy's nerve, never below Average, and the effect is lifted again after a few seconds. See [CHANGELOG.md](CHANGELOG.md). Crash hardening from 3.0.7 and the 3.0.6 audit fixes are included.
 
 Observed with the 3.0.7 binary on Skyrim AE **1.6.1170.0 with SKSE 2.2.8** and a 333-plugin load order: `plugin NemesisCombatAI.dll (00000001 NemesisCombatAI 03000070) loaded correctly`, both settings files read, For Honor and Dynamic Grip found, `ready:`, casters graded (`rabble=589 trained=443 veteran=288 elite=248`), styles restored on a world change, a save loaded (`co-save: 0 pending`), casters graded again, and a For Honor master excluded from Dynamic Grip. No error line, no crash log. No fight was played in that session.
 
-**Not verified:** 3.0.8 has not been started in the game; its fleeing rules are covered by host tests (including a sweep of 233,280 fighter and fight combinations). The Confidence value has not been read back in a played fight on any build after 3.0.0, and no 1.7.99/1.7.104 run exists. Declared compatibility for 1.7.x is not proof.
+**Not verified:** 3.0.8 and 3.0.9 have not been started in the game; its fleeing rules are covered by host tests (including a sweep of 233,280 fighter and fight combinations). The Confidence value has not been read back in a played fight on any build after 3.0.0, and no 1.7.99/1.7.104 run exists. Declared compatibility for 1.7.x is not proof.
 
 ## Licence and credits
 

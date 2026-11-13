@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.9
+
+Smarter and lighter.
+
+- **Race-aware doctrine.** Doctrine also comes from race keywords. The undead (not vampires), daedric creatures and Dwarven constructs are fearless whatever faction they are in; a vampire or dremora with no known faction fights like its kind. Skeletons, constructs and atronachs belong to no faction the doctrine table knows, so before this they were judged like untrained bandits and a group of them could rout.
+- **Creatures never rout.** Only people (race keyword ActorTypeNPC) can break and run. In the race data Draugr, skeletons, Falmer, giants, hagravens and spriggans are creatures.
+- **A leader holds the line.** Losses alone no longer break a band while a clearly stronger friend is still fighting beside them. Kill the chief to break them.
+- **Titles match whole words.** "King" no longer matches inside another name; "Chieftain" added.
+- **Lighter.** Hit events on actors nobody tracks are dropped before they queue a task (a lock-free mirror of the tracked actors), and race keyword lookups are cached per race.
+- A hit on a tracked actor right after the mod was switched off in the MCM no longer re-applies a shift before the sweep hands it back.
+- Tests for each of the above.
+
 ## 3.0.8
 
 Gameplay fix: enemies ran away too often.

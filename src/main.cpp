@@ -126,8 +126,8 @@ namespace
     // csHumanBoss1H / csHumanBoss2H plus, once resolved, the Nemesis boss pool that SkyPatcher swaps them for:
     // with the tiered styles installed no boss still carries a vanilla boss style when a fight starts.
     std::unordered_set<RE::FormID> g_bossStyles{ 0x3DECE, 0x3DECF };
-    constexpr std::string_view kTitles[] = { "Boss", "Chief", "Champion", "Warlord", "Commander", "General", "Jarl",
-        "Captain", "Master", "Veteran", "Thane", "Lord", "King", "Queen", "Leader" };
+    IdMirror<kMaxTracked> g_hitTargets;                   // tracked actors, readable from any thread (hit filter)
+    std::unordered_map<const RE::TESRace*, RaceTraits> g_raceTraits;  // races never change after data load
 
     // Every entry the game or SKSE calls goes through this. A C++ exception that leaves a plugin callback takes the
     // whole game down; here it becomes one log line and the callback simply ends.
@@ -262,6 +262,29 @@ namespace
         return RE::TESForm::LookupByID<RE::Actor>(id);
     }
 
+    bool RaceHas(const RE::TESRace* race, std::string_view keyword)
+    {
+        return race && race->HasKeywordString(keyword);
+    }
+
+    // Race keywords decide who is a person (Dynamic Grip itself only targets ActorTypeNPC) and who is an animal.
+    bool RaceHas(const RE::TESNPC* npc, std::string_view keyword)
+    {
+        return npc && RaceHas(npc->race, keyword);
+    }
+
+    // Keyword lookups are string compares, and Scan builds a profile for every nearby ally, so remember each race.
+    const RaceTraits& TraitsOf(const RE::TESRace* race)
+    {
+        if (const auto it = g_raceTraits.find(race); it != g_raceTraits.end()) return it->second;
+        RaceTraits traits;
+        if (race) {
+            traits = { RaceHas(race, "ActorTypeNPC"sv), RaceHas(race, "ActorTypeUndead"sv), RaceHas(race, "ActorTypeDaedra"sv),
+                RaceHas(race, "ActorTypeDwarven"sv), RaceHas(race, "Vampire"sv) };
+        }
+        return g_raceTraits.emplace(race, traits).first->second;
+    }
+
     // Who the actor is: doctrine and rank from factions, titles from its name and combat style, skill and gear from stats.
     Profile BuildProfile(RE::Actor* actor, bool useGear)
     {
@@ -288,23 +311,18 @@ namespace
         });
 
         p.master = g_int.masterPerk && actor->HasPerk(g_int.masterPerk);
+        // The current race, not the base's: a vampire lord or a werewolf is judged as what it is right now.
+        const RaceTraits& race = TraitsOf(actor->GetRace());
+        p.person = race.person;
+        p.doctrine = RaceDoctrine(p.doctrine, race);
         if (const auto base = actor->GetActorBase()) {
             p.unique = base->IsUnique();
             if (const auto style = base->GetCombatStyle()) {
                 p.boss = g_bossStyles.contains(style->GetFormID());
             }
         }
-        if (const char* name = actor->GetName()) {
-            const std::string_view view{ name };
-            p.titled = std::ranges::any_of(kTitles, [&](std::string_view t) { return view.find(t) != std::string_view::npos; });
-        }
+        p.titled = HasTitle(NameOf(actor));
         return p;
-    }
-
-    // Race keywords decide who is a person (Dynamic Grip itself only targets ActorTypeNPC) and who is an animal.
-    bool RaceHas(const RE::TESNPC* npc, std::string_view keyword)
-    {
-        return npc && npc->race && npc->race->HasKeywordString(keyword);
     }
 
     bool IsPlayerSide(RE::Actor* actor)
@@ -371,6 +389,7 @@ namespace
     void DropTracked(std::unordered_map<RE::FormID, Tracked>::iterator it)
     {
         Release(it->first, ActorById(it->first), it->second);
+        g_hitTargets.Remove(it->first);
         g_tracked.erase(it);
         g_trackedCount.store(g_tracked.size(), std::memory_order_relaxed);
     }
@@ -562,6 +581,7 @@ namespace
         if (g_tracked.contains(id) || g_tracked.size() >= kMaxTracked) return;
         if (!Eligible(actor, s) || !actor->IsInCombat()) return;
         auto& t = g_tracked[id];
+        g_hitTargets.Add(id);
         g_trackedCount.store(g_tracked.size(), std::memory_order_relaxed);
         Evaluate(id, actor, t, s);
     }
@@ -679,11 +699,13 @@ namespace
 
         RE::BSEventNotifyControl ProcessEvent(const RE::TESHitEvent* e, RE::BSTEventSource<RE::TESHitEvent>*) override
         {
-            if (!g_ready || !e || !e->target || g_trackedCount.load(std::memory_order_relaxed) == 0) {
+            // Hits arrive in bursts (every arrow, every tick of a flame spell). Only hits on tracked actors cost a task.
+            if (!g_ready || !e || !e->target || !g_hitTargets.Contains(e->target->GetFormID())) {
                 return RE::BSEventNotifyControl::kContinue;
             }
             const auto id = e->target->GetFormID();
             Post([id](const Settings& s) {
+                if (!s.enabled) return;   // switched off mid-fight: let the sweep hand the shift back, do not re-apply it
                 const auto it = g_tracked.find(id);
                 if (it == g_tracked.end() || Clock::now() < it->second.next) return;
                 if (const auto actor = ActorById(id)) Evaluate(id, actor, it->second, s);
@@ -750,10 +772,7 @@ namespace
         }
         p.doctrine = Doctrine::Caster;
         p.unique = npc->IsUnique();
-        if (const char* name = npc->GetName()) {
-            const std::string_view view{ name };
-            p.titled = std::ranges::any_of(kTitles, [&](std::string_view t) { return view.find(t) != std::string_view::npos; });
-        }
+        if (const char* name = npc->GetName()) p.titled = HasTitle(name);
         return p;
     }
 
@@ -894,6 +913,7 @@ namespace
         ReleaseGripBlocks("world change"sv);
         RestoreCasterStyles("world change"sv);
         ++g_generation;
+        g_hitTargets.Clear();
         g_tracked.clear();
         g_pending.clear();
         g_trackedCount.store(0);
