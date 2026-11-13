@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -125,16 +126,43 @@ namespace
     constexpr std::string_view kTitles[] = { "Boss", "Chief", "Champion", "Warlord", "Commander", "General", "Jarl",
         "Captain", "Master", "Veteran", "Thane", "Lord", "King", "Queen", "Leader" };
 
-    void SetupLog()
+    // Every entry the game or SKSE calls goes through this. A C++ exception that leaves a plugin callback takes the
+    // whole game down; here it becomes one log line and the callback simply ends.
+    template <class F>
+    void Guarded(const char* where, F&& work) noexcept
     {
-        auto dir = SKSE::log::log_directory();
-        if (!dir) return;
-        *dir /= "NemesisCombatAI.log";
-        auto logger = std::make_shared<spdlog::logger>("ncai", std::make_shared<spdlog::sinks::basic_file_sink_mt>(dir->string(), true));
-        logger->set_level(spdlog::level::info);
-        logger->flush_on(spdlog::level::info);
-        spdlog::set_default_logger(std::move(logger));
-        spdlog::set_pattern("%H:%M:%S.%e [%l] %v");
+        try {
+            work();
+        } catch (const std::exception& e) {
+            try { spdlog::error("{}: {}", where, e.what()); } catch (...) {}
+        } catch (...) {
+            try { spdlog::error("{}: unknown exception", where); } catch (...) {}
+        }
+    }
+
+    // The log is a convenience, never a reason to stop the game: path::string() throws when the Documents path has
+    // characters outside the system code page, and the sink throws when the file cannot be opened (read-only or
+    // protected folder). Either way the plugin keeps running without a file log.
+    void SetupLog() noexcept
+    {
+        try {
+            auto dir = SKSE::log::log_directory();
+            if (!dir) return;
+            *dir /= "NemesisCombatAI.log";
+            auto logger = std::make_shared<spdlog::logger>("ncai", std::make_shared<spdlog::sinks::basic_file_sink_mt>(dir->string(), true));
+            logger->set_level(spdlog::level::info);
+            logger->flush_on(spdlog::level::info);
+            spdlog::set_default_logger(std::move(logger));
+            spdlog::set_pattern("%H:%M:%S.%e [%l] %v");
+        } catch (...) {
+        }
+    }
+
+    // Engine name getters can hand back null; a null const char* must never reach a formatter.
+    const char* NameOf(RE::Actor* actor)
+    {
+        const char* name = actor ? actor->GetName() : nullptr;
+        return name ? name : "";
     }
 
     std::string Lower(std::string text)
@@ -353,7 +381,7 @@ namespace
         if (block && !has) {
             if (keywords->AddKeyword(g_int.gripBlock)) {
                 g_grip.Block(base->GetFormID());
-                spdlog::info("grip: {:08X} ({}) excluded from Dynamic Grip: {}", actor->GetFormID(), actor->GetName(), why);
+                spdlog::info("grip: {:08X} ({}) excluded from Dynamic Grip: {}", actor->GetFormID(), NameOf(actor), why);
             }
         } else if (!block && has && g_grip.TakeBack(base->GetFormID())) {
             keywords->RemoveKeyword(g_int.gripBlock);
@@ -552,11 +580,13 @@ namespace
     {
         const auto gen = g_generation.load();
         SKSE::GetTaskInterface()->AddTask([gen, work = std::forward<F>(work)] {
-            if (gen != g_generation.load()) return;  // world changed since the event fired
-            const Settings s = ReadSettings();
-            if (!g_pending.empty()) DrainPending();
-            work(s);
-            Sweep(s);
+            Guarded("task", [&] {
+                if (gen != g_generation.load()) return;  // world changed since the event fired
+                const Settings s = ReadSettings();
+                if (!g_pending.empty()) DrainPending();
+                work(s);
+                Sweep(s);
+            });
         });
     }
 
@@ -750,7 +780,7 @@ namespace
 
     // ---- co-save: outstanding deltas, same record layout as 2.x ----
 
-    void OnSave(SKSE::SerializationInterface* ser)
+    void SaveImpl(SKSE::SerializationInterface* ser)
     {
         std::vector<std::byte> blob;
         const auto put = [&](RE::FormID id, const Legacy& d) {
@@ -770,7 +800,7 @@ namespace
         }
     }
 
-    void OnLoad(SKSE::SerializationInterface* ser)
+    void LoadImpl(SKSE::SerializationInterface* ser)
     {
         g_pending.clear();
         std::uint32_t type = 0, version = 0, length = 0;
@@ -806,7 +836,7 @@ namespace
         spdlog::info("co-save: {} pending delta record(s) recovered", g_pending.size());
     }
 
-    void OnRevert(SKSE::SerializationInterface*)
+    void RevertImpl()
     {
         // Hand back what this world still has before dropping the bookkeeping: an actor that survives the transition
         // (or a persistent reference) must not keep a permanent Confidence shift we applied.
@@ -829,7 +859,11 @@ namespace
         g_trackedCount.store(0);
     }
 
-    void OnMessage(SKSE::MessagingInterface::Message* msg)
+    void OnSave(SKSE::SerializationInterface* ser) { Guarded("save", [&] { SaveImpl(ser); }); }
+    void OnLoad(SKSE::SerializationInterface* ser) { Guarded("load", [&] { LoadImpl(ser); }); }
+    void OnRevert(SKSE::SerializationInterface*) { Guarded("revert", [] { RevertImpl(); }); }
+
+    void MessageImpl(SKSE::MessagingInterface::Message* msg)
     {
         switch (msg->type) {
         case SKSE::MessagingInterface::kDataLoaded:
@@ -863,6 +897,11 @@ namespace
             break;
         }
     }
+
+    void OnMessage(SKSE::MessagingInterface::Message* msg)
+    {
+        if (msg) Guarded("message", [&] { MessageImpl(msg); });
+    }
 }
 
 SKSEPluginLoad(const SKSE::LoadInterface* skse)
@@ -882,10 +921,15 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse)
     }
 
     const auto ser = SKSE::GetSerializationInterface();
+    const auto messaging = SKSE::GetMessagingInterface();
+    if (!ser || !messaging || !SKSE::GetTaskInterface()) {
+        spdlog::critical("SKSE did not provide its serialization, messaging or task interface - disabled");
+        return false;
+    }
     ser->SetUniqueID(kCoSaveId);
     ser->SetSaveCallback(OnSave);
     ser->SetLoadCallback(OnLoad);
     ser->SetRevertCallback(OnRevert);
-    SKSE::GetMessagingInterface()->RegisterListener(OnMessage);
+    messaging->RegisterListener(OnMessage);
     return true;
 }

@@ -6,7 +6,7 @@
 
 # Nemesis Combat AI
 
-> **Beta build (3.0.6).** Loads and initialises on Skyrim AE 1.6.1170; the morale shift has not yet been read back in a played fight, and 1.7.x is declared-only. Treat it as a test build, not a stable release.
+> **3.0.7.** Load-tested on Skyrim AE 1.6.1170 (start, data load, save load, caster grading, For Honor exclusion). The morale shift has not been read back in a played fight, and 1.7.x is declared only.
 
 <p>
   <a href="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml"><img src="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -67,20 +67,20 @@ cd NemesisCombatAI
 xmake f -p windows -a x64 -m release -y
 xmake b -y                                    # plugin and host policy tests
 ./build/windows/x64/release/policy_tests.exe
-python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.6
+python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.7
 python tools/check_package.py
-python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.6.zip --expect-version 3.0.6
+python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.7.zip --expect-version 3.0.7
 ```
 
 The plugin is linked with the static C runtime, so it does not need the Visual C++ redistributable. The build never deploys anything to your game.
 
 ## Status
 
-3.0.6 is an audit release on top of 3.0.5. It fixes a For Honor master losing its Dynamic Grip exclusion when the grip option was off, restores the boss bonus when the tiered styles are installed, reads the authored Confidence from the permanent value so fear and rally effects are left alone, and ships an optimised binary (3.0.1-3.0.5 were built without optimisation). See [CHANGELOG.md](CHANGELOG.md).
+3.0.7 hardens the plugin against crashes: a C++ exception in any callback is logged instead of ending the game, the log file is optional (an unusual or protected Documents folder no longer stops the plugin), and missing SKSE interfaces are refused cleanly. It includes the 3.0.6 audit fixes (For Honor master exclusion with the grip option off, boss bonus with the tiered styles, fear and rally left alone, optimised binary). See [CHANGELOG.md](CHANGELOG.md).
 
-Observed on Skyrim AE **1.6.1170.0 with SKSE 2.2.8** (3.0.3-3.0.5 binaries): the plugin loads, reaches `ready:`, reads a save, grades caster styles (`graded rabble=589 trained=443 veteran=288 elite=248`), restores them on a world change and excludes a For Honor master from Dynamic Grip.
+Observed with the 3.0.7 binary on Skyrim AE **1.6.1170.0 with SKSE 2.2.8** and a 333-plugin load order: `plugin NemesisCombatAI.dll (00000001 NemesisCombatAI 03000070) loaded correctly`, both settings files read, For Honor and Dynamic Grip found, `ready:`, casters graded (`rabble=589 trained=443 veteran=288 elite=248`), styles restored on a world change, a save loaded (`co-save: 0 pending`), casters graded again, and a For Honor master excluded from Dynamic Grip. No error line, no crash log. No fight was played in that session.
 
-**Not verified:** the 3.0.6 binary has not been run in game. The Confidence value has not been read back in a played fight on any 3.0.x build after 3.0.0, and no 1.7.99/1.7.104 run exists. Declared compatibility for 1.7.x is not proof.
+**Not verified:** the Confidence value has not been read back in a played fight on any build after 3.0.0, and no 1.7.99/1.7.104 run exists. Declared compatibility for 1.7.x is not proof.
 
 ## Licence and credits
 

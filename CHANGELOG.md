@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.0.7
+
+Crash hardening on top of 3.0.6.
+
+- A C++ exception inside any plugin callback (startup, data loaded, save, load, revert, queued work) is written to the log as `<where>: <message>` instead of leaving the callback and closing the game.
+- The log file is optional. A Documents path with characters outside the system code page, or a folder the game may not write to, used to throw during plugin load; the plugin now runs without a file log.
+- The plugin refuses to load, with one log line, when SKSE does not hand over its serialization, messaging or task interface.
+- A null actor name can no longer reach the log formatter.
+- No gameplay, record, FormID, settings or co-save change from 3.0.6.
+
 ## 3.0.6 (beta)
 
 Audit release. Static gates pass; this binary has not been run in game yet.

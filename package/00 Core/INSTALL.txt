@@ -1,4 +1,4 @@
-Nemesis Combat AI 3.0.6
+Nemesis Combat AI 3.0.7
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
@@ -71,13 +71,16 @@ TROUBLESHOOTING
   your Address Library does not match your game build; update it (v13 or newer for 1.7.99/1.7.104). 3.0.1 is built to
   fix the version of this error that 3.0.0 threw on 1.7.104; confirmation on 1.7.x is still pending.
 
-BETA BUILD
-  This is a beta. 3.0.3-3.0.5 load and initialise on Skyrim AE 1.6.1170; 3.0.6 has been through every static
-  check but has not been run in game yet, the morale shift has not been read back in a played fight, and no 1.7.x
-  run exists. Keep a working 2.0.4/3.0.0 install to fall back to.
-
 TESTING STATUS
-  Built from source, host-tested and tool-validated. Gameplay was played on 3.0.0 (loading, integrations, caster
-  grading and morale in a bandit fight). 3.0.3-3.0.5 were load-tested on Skyrim AE 1.6.1170 (load, ready, save load,
-  caster grading, For Honor master exclusion); combat behaviour and 1.7.x are not confirmed yet. Long sessions, huge battles and every mod
-  combination are untested; report anything odd.
+  Built from source, host-tested and tool-validated. 3.0.7 was started on Skyrim AE 1.6.1170 with SKSE 2.2.8 and a
+  333-plugin load order: it loaded, read its settings, found For Honor and Dynamic Grip, graded casters, went through
+  a save load and excluded a For Honor master from Dynamic Grip, with no error line and no crash. Gameplay was last
+  played on 3.0.0.
+  Still open: the Confidence value has not been read back in a played fight since 3.0.0, and no run on 1.7.99 or
+  1.7.104 exists (those builds are declared, not tested). Long sessions, huge battles and every mod combination are
+  untested. Keep the previous version's archive so you can go back, and report anything odd with the two logs.
+
+IF THE GAME CRASHES
+  Send NemesisCombatAI.log, skse64.log and the crash log (CrashLogger or Trainwreck). From 3.0.7 a C++ error inside
+  this plugin is written to NemesisCombatAI.log as "<where>: <message>" instead of closing the game, and a log file
+  that cannot be created (protected or unusual Documents folder) no longer stops the plugin.

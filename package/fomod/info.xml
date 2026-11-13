@@ -2,7 +2,7 @@
 <fomod>
   <Name>Nemesis Combat AI</Name>
   <Author>GennyWoo</Author>
-  <Version MachineVersion="3.0.6">3.0.6</Version>
+  <Version MachineVersion="3.0.7">3.0.7</Version>
   <Website>https://www.nexusmods.com/skyrimspecialedition/mods/185305</Website>
   <Description>Enemy nerve, morale and tactics from who they are and what is happening around them: a native SKSE plugin plus tiered combat styles for melee, Draugr, archers, Forsworn, bosses and mages. Detects For Honor, Dynamic Grip and NPC Spell Variance. Movesets stay with For Honor / BFCO. Replaces SkyTactics.</Description>
 </fomod>
