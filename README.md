@@ -6,7 +6,7 @@
 
 # Nemesis Combat AI
 
-> **3.0.7.** Load-tested on Skyrim AE 1.6.1170 (start, data load, save load, caster grading, For Honor exclusion). The morale shift has not been read back in a played fight, and 1.7.x is declared only.
+> **3.0.8.** Enemies no longer run away on their own: by default only a pack of untrained fighters can break, and only while someone is still fighting beside them (`Fleeing`, below). Load-tested on Skyrim AE 1.6.1170 up to 3.0.7; 3.0.8 is host-tested, not yet played, and 1.7.x is declared only.
 
 <p>
   <a href="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml"><img src="https://github.com/SenjuWoo/NemesisCombatAI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -16,13 +16,14 @@
 
 </div>
 
-Enemy nerve, morale and tactics for Skyrim Special Edition / Anniversary Edition: a native SKSE plugin plus a pack of tiered combat styles. Enemies get a mind rating from their level, combat skill, faction rank, leader title and faction doctrine, and the fight itself moves their nerve. Low-level enemies are cowardly and dumb, trained soldiers hold, veterans turn desperate instead of breaking, and elites stay composed. Movesets, attacks and animations are never touched: [For Honor In Skyrim BFCO](https://www.nexusmods.com/skyrimspecialedition/mods/185459) owns movesets.
+Enemy nerve, morale and tactics for Skyrim Special Edition / Anniversary Edition: a native SKSE plugin plus a pack of tiered combat styles. Enemies get a mind rating from their level, combat skill, faction rank, leader title and faction doctrine, and the fight itself moves their nerve. Untrained enemies break only when their pack does, trained soldiers hold, veterans turn desperate instead of breaking, and elites stay composed. Movesets, attacks and animations are never touched: [For Honor In Skyrim BFCO](https://www.nexusmods.com/skyrimspecialedition/mods/185459) owns movesets.
 
 The mod is distributed on [Nexus Mods](https://www.nexusmods.com/skyrimspecialedition/mods/185305) and as a FOMOD archive on the [releases page](../../releases). This repository is its source.
 
 ## What it does
 
 - **Morale layer (native plugin, event-driven).** Reacts to combat starting, deaths and hits; no hooks, no Papyrus polling, no per-frame work. Only the engine's own Confidence value is moved, by a tracked amount that is taken off again when the fight ends, the actor dies or unloads, or the mod is switched off. Anything outstanding at save time is stored in the SKSE co-save and cleaned on load.
+- **Enemies do not run on their own.** Vanilla bandits are Foolhardy or Brave and fight on, so any flight is this mod's doing and is kept deliberate: by default only a pack of untrained fighters can break (the leader falls, or they are losing the crowd and still have someone fighting beside them), only down to Average, and a lone survivor never runs. The lowered value is given back a few seconds later by a short timer that runs only while an enemy carries a negative shift. `Fleeing=never` switches it off.
 - **Tiered combat styles.** 31 styles in a light plugin for human melee, Draugr, archers, Forsworn, bosses and mages, applied through SkyPatcher. Mages are regraded once per session by the plugin from each caster's own level and skill.
 - **For Honor wins.** An NPC that For Honor marks as a weapon master (its perk) is treated as Elite, and when Dynamic Grip is installed it is added to Dynamic Grip's own blacklist keyword so its For Honor moveset is not replaced.
 - **Dynamic Grip support.** An optional setting lets only trained-or-better fighters, never casters, switch grips.
@@ -45,7 +46,7 @@ The tiered styles need SkyTactics' plugin disabled; Dynamic Grip and For Honor a
 
 ## Settings
 
-In game: Mod Configuration Menu, Nemesis Combat AI. Files: `Data/SKSE/Plugins/NemesisCombatAI.d/*.ini` with `CasterTiers=0|1`, `GripTiers=0|1`, `Debug=0|1` (log every verdict and release instead of the first 25) and `CasterStyle=Plugin.esp|HexFormID` to grade another mod's caster style. Later file names win; unknown keys are reported in the log.
+In game: Mod Configuration Menu, Nemesis Combat AI. Files: `Data/SKSE/Plugins/NemesisCombatAI.d/*.ini` with `CasterTiers=0|1`, `GripTiers=0|1`, `Fleeing=never|rare|often` (default `rare`), `Debug=0|1` (log every verdict and release instead of the first 25) and `CasterStyle=Plugin.esp|HexFormID` to grade another mod's caster style. Later file names win; unknown keys are reported in the log.
 
 ## Repository layout
 
@@ -67,20 +68,20 @@ cd NemesisCombatAI
 xmake f -p windows -a x64 -m release -y
 xmake b -y                                    # plugin and host policy tests
 ./build/windows/x64/release/policy_tests.exe
-python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.7
+python tools/verify_version_block.py build/windows/x64/release/NemesisCombatAI.dll --expect-version 3.0.8
 python tools/check_package.py
-python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.7.zip --expect-version 3.0.7
+python tools/make_release_zip.py build/windows/x64/release/NemesisCombatAI.dll ../NemesisCombatAI-3.0.8.zip --expect-version 3.0.8
 ```
 
 The plugin is linked with the static C runtime, so it does not need the Visual C++ redistributable. The build never deploys anything to your game.
 
 ## Status
 
-3.0.7 hardens the plugin against crashes: a C++ exception in any callback is logged instead of ending the game, the log file is optional (an unusual or protected Documents folder no longer stops the plugin), and missing SKSE interfaces are refused cleanly. It includes the 3.0.6 audit fixes (For Honor master exclusion with the grip option off, boss bonus with the tiered styles, fear and rally left alone, optimised binary). See [CHANGELOG.md](CHANGELOG.md).
+3.0.8 is a gameplay fix: enemies ran away far too often. Vanilla bandits are Foolhardy or Brave, so every flight came from this mod's morale shifts (a high-level player, low health and being outnumbered each pushed untrained fighters toward Cowardly). With the new default only a breaking pack can lower an enemy's nerve, never below Average, and the effect is lifted again after a few seconds. See [CHANGELOG.md](CHANGELOG.md). Crash hardening from 3.0.7 and the 3.0.6 audit fixes are included.
 
 Observed with the 3.0.7 binary on Skyrim AE **1.6.1170.0 with SKSE 2.2.8** and a 333-plugin load order: `plugin NemesisCombatAI.dll (00000001 NemesisCombatAI 03000070) loaded correctly`, both settings files read, For Honor and Dynamic Grip found, `ready:`, casters graded (`rabble=589 trained=443 veteran=288 elite=248`), styles restored on a world change, a save loaded (`co-save: 0 pending`), casters graded again, and a For Honor master excluded from Dynamic Grip. No error line, no crash log. No fight was played in that session.
 
-**Not verified:** the Confidence value has not been read back in a played fight on any build after 3.0.0, and no 1.7.99/1.7.104 run exists. Declared compatibility for 1.7.x is not proof.
+**Not verified:** 3.0.8 has not been started in the game; its fleeing rules are covered by host tests (including a sweep of 233,280 fighter and fight combinations). The Confidence value has not been read back in a played fight on any build after 3.0.0, and no 1.7.99/1.7.104 run exists. Declared compatibility for 1.7.x is not proof.
 
 ## Licence and credits
 

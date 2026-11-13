@@ -21,6 +21,7 @@
 #include <format>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -49,6 +50,7 @@ namespace
     constexpr auto kCasualtyWindow = 25s;
     constexpr auto kEvalCooldown = 1s;
     constexpr auto kSweepInterval = 2s;
+    constexpr auto kRecheckInterval = 4s;                // how often a negative shift is looked at again
 
     struct Legacy { float aggression = 0, confidence = 0, attack = 0, speed = 0; };
 
@@ -73,6 +75,7 @@ namespace
         bool casterTiers = true;   // regrade pure-caster combat styles by level (needs NemesisCombatAI_Styles.esp)
         bool gripTiers = false;    // Dynamic Grip only for schooled fighters (For Honor masters are always excluded)
         bool debug = false;        // Debug=1: every verdict and release goes to the log, not only the first 25
+        Fleeing fleeing = Fleeing::Rare;  // Fleeing=never|rare|often: how readily enemies may be pushed into running
         std::vector<std::pair<std::string, RE::FormID>> extraCasterStyles;  // CasterStyle=Plugin.esp|HexFormID
     } g_cfg;
 
@@ -216,6 +219,9 @@ namespace
                     g_cfg.gripTiers = on;
                 } else if (key == "debug") {
                     g_cfg.debug = on;
+                } else if (key == "fleeing") {
+                    if (const auto mode = ParseFleeing(flag)) g_cfg.fleeing = *mode;
+                    else spdlog::warn("{}: Fleeing='{}' is not never/rare/often (or 0/1/2), keeping {}", file.filename().string(), value, FleeingName(g_cfg.fleeing));
                 } else if (key == "casterstyle") {
                     const auto bar = value.find('|');
                     const auto id = bar == std::string::npos ? 0UL : std::strtoul(value.c_str() + bar + 1, nullptr, 16);
@@ -234,7 +240,8 @@ namespace
             spdlog::default_logger()->set_level(spdlog::level::debug);
             spdlog::default_logger()->flush_on(spdlog::level::debug);
         }
-        spdlog::info("config: casterTiers={} gripTiers={} debug={} extraCasterStyles={}", g_cfg.casterTiers, g_cfg.gripTiers, g_cfg.debug, g_cfg.extraCasterStyles.size());
+        spdlog::info("config: casterTiers={} gripTiers={} fleeing={} debug={} extraCasterStyles={}", g_cfg.casterTiers, g_cfg.gripTiers,
+            FleeingName(g_cfg.fleeing), g_cfg.debug, g_cfg.extraCasterStyles.size());
     }
 
     float Value(const RE::TESGlobal* g, float fallback)
@@ -456,6 +463,8 @@ namespace
         }
     }
 
+    void ScheduleRecheck();
+
     void Evaluate(RE::FormID id, RE::Actor* actor, Tracked& t, const Settings& s)
     {
         const Profile profile = BuildProfile(actor, s.gear);
@@ -496,16 +505,18 @@ namespace
         // Authored Confidence is the baseline; keep the final value inside the engine's 0..4 scale. The permanent
         // value is used so a fear or rally effect (a temporary modifier) is neither read as authored nor cancelled.
         const float base = AuthoredBase(actor->GetPermanentActorValue(RE::ActorValue::kConfidence), t.applied);
-        const float wanted = ClampConfidence(base + mind.confidenceShift) - base;
+        // The floors decide how far pressure may lower it: by default only a routing pack can make an enemy run.
+        const float wanted = WantedConfidence(base, mind.confidenceShift, mind.routed, g_cfg.fleeing) - base;
         if (std::fabs(wanted - t.applied) >= 0.5F || (wanted == 0.0F && t.applied != 0.0F)) {
             ApplyDelta(actor, { 0.0F, wanted - t.applied, 0.0F, 0.0F });
             // av/base are the engine's own Confidence numbers, so a report shows the applied value, not just intent.
             spdlog::log(EvidenceLevel(),
-                "{:08X} tier={} intellect={:.2f} allies={} foes={} casualties={} shift {:+.2f} -> {:+.2f} av={:.2f} base={:.2f}", id,
+                "{:08X} tier={} intellect={:.2f} allies={} foes={} casualties={} shift {:+.2f} -> {:+.2f} av={:.2f} base={:.2f} routed={}", id,
                 static_cast<int>(mind.tier), mind.intellect, sit.allies, sit.foes, sit.casualties, t.applied, wanted,
-                actor->GetActorValue(RE::ActorValue::kConfidence), base);
+                actor->GetActorValue(RE::ActorValue::kConfidence), base, mind.routed);
             t.applied = wanted;
         }
+        if (t.applied < 0.0F) ScheduleRecheck();  // a negative shift fades with time, so look again soon
     }
 
     // Opportunistic cleanup instead of polling: runs from event handlers at most every few seconds.
@@ -588,6 +599,35 @@ namespace
                 Sweep(s);
             });
         });
+    }
+
+    // A negative shift answers something that just happened (a leader fell, friends died) and fades with time, but
+    // the engine only sends events when something happens. While any enemy carries a negative shift, look again every
+    // few seconds, so a routed pack comes back to the fight instead of staying scared until combat ends. The timer
+    // is one short sleep per round and stops by itself once nobody carries a negative shift.
+    std::atomic<bool> g_recheckPending{ false };
+
+    void Recheck(const Settings& s)
+    {
+        if (!s.enabled) return;
+        for (auto& [id, t] : g_tracked) {
+            if (t.applied >= 0.0F) continue;
+            if (const auto actor = ActorById(id); actor && actor->IsInCombat()) Evaluate(id, actor, t, s);
+        }
+    }
+
+    void ScheduleRecheck()
+    {
+        if (g_recheckPending.exchange(true)) return;
+        try {
+            std::thread([] {
+                std::this_thread::sleep_for(kRecheckInterval);
+                g_recheckPending = false;
+                Guarded("recheck", [] { Post([](const Settings& s) { Recheck(s); }); });
+            }).detach();
+        } catch (...) {
+            g_recheckPending = false;
+        }
     }
 
     void ScanCombatants()

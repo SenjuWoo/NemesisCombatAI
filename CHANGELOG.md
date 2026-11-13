@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.8
+
+Gameplay fix: enemies ran away too often.
+
+- **Cause.** Vanilla bandits are Foolhardy (fight to the death) or Brave, so every flight was this mod's doing. Ordinary pressure (a player far above the enemy's level, health under half, being outnumbered) could lower an untrained fighter's Confidence to Cowardly, and Average already means "avoids higher-level opponents".
+- **New rule.** With the default `Fleeing=rare`, Confidence is lowered only when a pack of untrained fighters is breaking (the leader fell, or at least two friends fell and more fell than are left, with someone still fighting beside them) and never below Average. A lone survivor never runs. Trained soldiers, veterans, elites, leaders, the fearless and For Honor masters never rout.
+- **It ends.** While any enemy carries a lowered value a short timer re-checks it every few seconds, so the shift is lifted once the moment has passed instead of lasting until combat ends.
+- **Setting.** `Fleeing=never|rare|often` in `Data/SKSE/Plugins/NemesisCombatAI.d/*.ini`; a new `00-core.ini` ships it with the default. `never` switches lowering off completely; `often` lets milder pressure shake untrained fighters (closer to 3.0.0-3.0.7).
+- The rest of the nerve system is unchanged: veterans and elites still hold, last stand and the fearless floor still raise Confidence.
+- Tests: new rules plus a sweep of 233,280 fighter and fight combinations proving that, with the default setting, nothing lowers Confidence without a rout and nothing goes below Average.
+- Docs and menu help text no longer promise enemies that "break easily".
+
 ## 3.0.7
 
 Crash hardening on top of 3.0.6.

@@ -32,7 +32,7 @@
                 {
                     "id": "bCounterTactics",
                     "text": "Situational Reactions",
-                    "help": "NPCs size up their target: facing someone much higher level shakes low-tier fighters, and trained fighters push in on archers and mages instead of breaking.",
+                    "help": "NPCs size up their target: trained fighters push in on archers and mages instead of breaking. A much higher-level target only matters once a pack of untrained fighters is already breaking.",
                     "type": "toggle",
                     "valueOptions": {
                         "sourceType": "GlobalValue",
@@ -43,7 +43,7 @@
                 {
                     "id": "bGroupTactics",
                     "text": "Group Morale",
-                    "help": "Nearby fighting allies, a stronger leader at their side, friends dying around them and being outnumbered change an NPC's nerve. Rabble swing hard with the crowd; veterans and elites hold steady.",
+                    "help": "Nearby fighting allies, a stronger leader at their side, friends dying around them and being outnumbered change an NPC's nerve. Untrained fighters run only when their leader falls or they are clearly losing the crowd, and only while someone is still fighting beside them; veterans and elites hold steady. Set Fleeing=never in the ini to switch running off completely.",
                     "type": "toggle",
                     "valueOptions": {
                         "sourceType": "GlobalValue",

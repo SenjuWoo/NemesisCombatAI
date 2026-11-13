@@ -1,4 +1,4 @@
-Nemesis Combat AI 3.0.7
+Nemesis Combat AI 3.0.8
 
 Gives enemies a brain: nerve, morale and tactics that depend on who they are and what is happening around them.
 Movesets, attacks and animations are NOT touched: For Honor In Skyrim BFCO owns movesets, NPC Spell Variance owns
@@ -27,9 +27,12 @@ INSTALL / UPDATE
 
 WHAT IT DOES
   Nerve and morale (always): every enemy in combat has a mind rating from its level, combat skill, faction rank,
-  leader title and faction doctrine. Rabble panic and rout when friends fall or a leader dies; trained soldiers
-  hold; veterans turn desperate instead of breaking; elites stay composed. Only the engine's own Confidence
-  value moves, and it is put back when the fight ends.
+  leader title and faction doctrine. Untrained fighters break and run only when their pack does: their leader
+  falls, or they are losing the crowd and still have someone fighting beside them. A lone survivor never runs, and
+  a high-level player, low health or being outnumbered do not make anyone run on their own (vanilla bandits are
+  Foolhardy or Brave and fight on, and so they do here). Trained soldiers hold; veterans turn desperate instead of
+  breaking; elites stay composed. Only the engine's own Confidence value moves, and it is put back a few seconds
+  after the moment passes and when the fight ends. Fleeing=never in the settings switches running off completely.
   Tiered combat styles ("Full tactics" option): 31 styles for human melee, Draugr, archers, Forsworn, bosses and
   mages. Mages are graded by their own level, from untrained casters that stand and bolt to archmages that kite.
   For Honor wins: NPCs that For Honor picks as weapon masters are treated as Elite and, when Dynamic Grip is
@@ -39,7 +42,7 @@ WHAT IT DOES
 
 SETTINGS
   In game: Mod Configuration Menu > Nemesis Combat AI.
-  Files: Data/SKSE/Plugins/NemesisCombatAI.d/*.ini  (CasterTiers=0/1, GripTiers=0/1, Debug=0/1, and
+  Files: Data/SKSE/Plugins/NemesisCombatAI.d/*.ini  (Fleeing=never/rare/often, CasterTiers=0/1, GripTiers=0/1, Debug=0/1, and
   CasterStyle=Plugin.esp|HexFormID to grade another mod's caster style). Later file names win; add your own file
   instead of editing the shipped ones. Debug=1 writes every verdict and release to the log instead of the first 25.
   A key the plugin does not know is reported in the log.
@@ -74,8 +77,9 @@ TROUBLESHOOTING
 TESTING STATUS
   Built from source, host-tested and tool-validated. 3.0.7 was started on Skyrim AE 1.6.1170 with SKSE 2.2.8 and a
   333-plugin load order: it loaded, read its settings, found For Honor and Dynamic Grip, graded casters, went through
-  a save load and excluded a For Honor master from Dynamic Grip, with no error line and no crash. Gameplay was last
-  played on 3.0.0.
+  a save load and excluded a For Honor master from Dynamic Grip, with no error line and no crash. 3.0.8 changes only
+  when an enemy may run away; its rules are covered by host tests (including a sweep of 233,280 fighter/fight
+  combinations) but it has not been started in the game. Gameplay was last played on 3.0.0.
   Still open: the Confidence value has not been read back in a played fight since 3.0.0, and no run on 1.7.99 or
   1.7.104 exists (those builds are declared, not tested). Long sessions, huge battles and every mod combination are
   untested. Keep the previous version's archive so you can go back, and report anything odd with the two logs.

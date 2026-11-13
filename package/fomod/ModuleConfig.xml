@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
-  <moduleName>Nemesis Combat AI 3.0.7</moduleName>
+  <moduleName>Nemesis Combat AI 3.0.8</moduleName>
   <requiredInstallFiles>
     <folder source="00 Core" destination="" priority="0" />
   </requiredInstallFiles>
@@ -10,7 +10,7 @@
         <group name="Combat tactics" type="SelectExactlyOne">
           <plugins order="Explicit">
             <plugin name="Full tactics (recommended)">
-              <description>Installs the native morale layer plus tiered combat styles for human melee, Draugr, archers, Forsworn, bosses and mages. Fighters are graded from untrained brawlers up to masters; low-level enemies fight dumb and break easily, high-level ones block, bash, circle and flank, and mages are graded by their own level from standing-and-bolting up to kiting archmages. Replaces SkyTactics. Movesets are not touched: For Honor / BFCO keeps them.</description>
+              <description>Installs the native morale layer plus tiered combat styles for human melee, Draugr, archers, Forsworn, bosses and mages. Fighters are graded from untrained brawlers up to masters; low-level enemies fight dumb and break only when their pack does, high-level ones block, bash, circle and flank, and mages are graded by their own level from standing-and-bolting up to kiting archmages. Replaces SkyTactics. Movesets are not touched: For Honor / BFCO keeps them.</description>
               <files>
                 <folder source="10 Tactics" destination="" priority="0" />
               </files>

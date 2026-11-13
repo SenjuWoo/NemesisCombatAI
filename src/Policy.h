@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <optional>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -48,6 +50,7 @@ namespace NCAI
         Tier tier = Tier::Rabble;
         float confidenceShift = 0.0F; // added to the actor's authored Confidence
         bool lastStand = false;
+        bool routed = false;         // the pack is breaking: the only case that may push an enemy into running
     };
 
     inline float Bounded(float value, float low, float high, float fallback)
@@ -157,6 +160,12 @@ namespace NCAI
             shift = std::max(shift, 1.0F);
         }
 
+        // A pack breaks; a lone survivor does not (nobody to run with, and a chase is no fun for the player). Only
+        // untrained fighters rout, and only when their leader fell or they are visibly losing the crowd.
+        mind.routed = s.groupAware && mind.tier == Tier::Rabble && !Fearless(p.doctrine) && s.allies > 0
+            && (s.leaderDown || (s.casualties >= 2 && s.allies < s.casualties));
+        if (mind.routed) shift = std::min(shift, -2.5F);
+
         // Experienced fighters turn desperate instead of breaking; the rage ends once they recover.
         const float exitHealth = s.lastStandActive ? 0.5F : 0.25F;
         mind.lastStand = s.lastStand && mind.tier >= Tier::Veteran && health < exitHealth
@@ -186,6 +195,48 @@ namespace NCAI
 
     // Confidence stays on the engine's authored scale.
     [[nodiscard]] inline float ClampConfidence(float a_value) noexcept { return std::clamp(a_value, 0.0F, 4.0F); }
+
+    // How readily this plugin may make an enemy run. The engine reads Confidence as willingness to fight a stronger
+    // foe (UESP, Skyrim:NPCs): 4 Foolhardy fights to the death, 3 Brave attacks unless outmatched, 2 Average avoids
+    // higher-level opponents, 1 Cautious attacks only lower-level ones, 0 Cowardly flees at low health. Vanilla
+    // bandits, Draugr and most soldiers are Foolhardy, so any flight a lowered value causes is this plugin's doing.
+    //   Never: Confidence is never lowered.
+    //   Rare (default): ordinary pressure never lowers it; only a routing pack may, down to Average.
+    //   Often: ordinary pressure may lower it to Brave, a routing pack down to Cautious.
+    enum class Fleeing { Never, Rare, Often };
+
+    struct Floors { float calm; float rout; };
+
+    [[nodiscard]] constexpr Floors FloorsFor(Fleeing a_mode) noexcept
+    {
+        switch (a_mode) {
+        case Fleeing::Never: return { 4.0F, 4.0F };
+        case Fleeing::Often: return { 3.0F, 1.0F };
+        default: return { 4.0F, 2.0F };
+        }
+    }
+
+    [[nodiscard]] inline std::optional<Fleeing> ParseFleeing(std::string_view a_text) noexcept
+    {
+        if (a_text == "never" || a_text == "0") return Fleeing::Never;
+        if (a_text == "rare" || a_text == "1") return Fleeing::Rare;
+        if (a_text == "often" || a_text == "2") return Fleeing::Often;
+        return std::nullopt;
+    }
+
+    [[nodiscard]] constexpr const char* FleeingName(Fleeing a_mode) noexcept
+    {
+        return a_mode == Fleeing::Never ? "never" : a_mode == Fleeing::Often ? "often" : "rare";
+    }
+
+    // The Confidence an enemy should have: the authored value moved by the shift, but never below the floor for the
+    // situation. A floor above the authored value means "leave it alone", so a base that is already low stays put.
+    [[nodiscard]] inline float WantedConfidence(float a_base, float a_shift, bool a_routed, Fleeing a_mode) noexcept
+    {
+        const Floors floors = FloorsFor(a_mode);
+        const float floor = std::min({ a_base, a_routed ? floors.rout : floors.calm, 4.0F });
+        return std::clamp(ClampConfidence(a_base + a_shift), floor, 4.0F);
+    }
 
     // One grading pass per world. The graded flag is separate from the generation on purpose: a world generation of
     // 0 is a real world, and a pass that failed or was skipped must not look like one that succeeded.

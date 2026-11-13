@@ -241,6 +241,141 @@ int main()
     assert(!OwnsKeyword(true, false));   // another mod or the console removed it
     assert(!OwnsKeyword(false, true));   // a foreign keyword we never added
 
+    // ---- fleeing: the 3.0.8 rules (vanilla bandits are Foolhardy, so any flight is ours) ----
+    {
+        // A pack breaks: leader down or a losing crowd, with someone to run with. Never a lone survivor.
+        Situation leaderFell;
+        leaderFell.allies = 1;
+        leaderFell.leaderDown = true;
+        const Mind broken = Think(Grunt(), leaderFell);
+        assert(broken.routed && broken.confidenceShift == -2.5F);
+
+        Situation losing;
+        losing.allies = 1;
+        losing.casualties = 2;
+        assert(Think(Grunt(), losing).routed);
+        losing.allies = 2;                          // as many friends left as fell: still holding
+        assert(!Think(Grunt(), losing).routed);
+
+        Situation alone;
+        alone.casualties = 3;
+        alone.leaderDown = true;
+        assert(!Think(Grunt(), alone).routed);      // nobody left to run with
+
+        leaderFell.groupAware = false;
+        assert(!Think(Grunt(), leaderFell).routed); // the Group Morale switch really switches it off
+
+        // Only untrained fighters rout; soldiers, veterans, leaders, masters and the fearless hold.
+        Situation breaking;
+        breaking.allies = 1;
+        breaking.leaderDown = true;
+        assert(!Think(Chief(), breaking).routed && !Think(Legend(), breaking).routed);
+        Profile soldier = Grunt();
+        soldier.level = 12.0F;
+        soldier.skill = 40.0F;
+        assert(Think(soldier, breaking).tier >= Tier::Trained && !Think(soldier, breaking).routed);
+        Profile ghoul = Grunt();
+        ghoul.doctrine = Doctrine::Undead;
+        assert(!Think(ghoul, breaking).routed);
+        Profile fh = Grunt();
+        fh.master = true;
+        assert(!Think(fh, breaking).routed);
+    }
+    {
+        // Floors. A Foolhardy bandit (4) under every kind of pressure stays at 4 unless its pack routs.
+        const float worst = -2.5F;
+        assert(WantedConfidence(4.0F, worst, false, Fleeing::Never) == 4.0F);
+        assert(WantedConfidence(4.0F, worst, false, Fleeing::Rare) == 4.0F);
+        assert(WantedConfidence(4.0F, worst, true, Fleeing::Never) == 4.0F);
+        assert(WantedConfidence(4.0F, worst, true, Fleeing::Rare) == 2.0F);    // Average: avoids higher-level foes
+        assert(WantedConfidence(4.0F, worst, false, Fleeing::Often) == 3.0F);  // Brave
+        assert(WantedConfidence(4.0F, worst, true, Fleeing::Often) == 1.5F);   // 4 - 2.5, above the Cautious floor
+        assert(WantedConfidence(4.0F, -3.5F, true, Fleeing::Often) == 1.0F);   // Cautious floor
+        // An authored value below the floor is left alone: nothing here makes a coward braver by accident.
+        assert(WantedConfidence(2.0F, worst, true, Fleeing::Rare) == 2.0F);
+        assert(WantedConfidence(1.0F, worst, true, Fleeing::Often) == 1.0F);
+        assert(WantedConfidence(0.0F, worst, false, Fleeing::Often) == 0.0F);
+        // Positive shifts are never held back by the floors.
+        assert(WantedConfidence(2.0F, 1.25F, false, Fleeing::Never) == 3.25F);
+        assert(WantedConfidence(3.5F, 2.0F, false, Fleeing::Rare) == 4.0F);
+        // No input can push the result outside 0..4 or below the authored value's floor.
+        for (const float base : { 0.0F, 0.5F, 1.0F, 2.0F, 3.0F, 3.75F, 4.0F }) {
+            for (const float shift : { -2.5F, -1.0F, 0.0F, 1.0F, 2.5F }) {
+                for (const bool routed : { false, true }) {
+                    for (const Fleeing mode : { Fleeing::Never, Fleeing::Rare, Fleeing::Often }) {
+                        const float got = WantedConfidence(base, shift, routed, mode);
+                        assert(got >= 0.0F && got <= 4.0F);
+                        if (shift <= 0.0F) assert(got <= base || base > 4.0F);   // a negative shift never raises it
+                        if (shift >= 0.0F) assert(got >= base);                  // a positive one never lowers it
+                    }
+                }
+            }
+        }
+        // A rout that ends releases the shift: once the conditions fade the wanted value is the authored one again.
+        assert(WantedConfidence(4.0F, 0.0F, false, Fleeing::Rare) - 4.0F == 0.0F);
+    }
+    {
+        // The promise to players, swept over a wide grid of fighters and fights instead of a few hand-picked cases:
+        // with the default setting an enemy's Confidence only ever drops when its pack is routing, and even then it
+        // stops at Average. Without a rout nothing in the policy can lower it at all.
+        unsigned fights = 0, routs = 0;
+        for (const Doctrine doctrine : { Doctrine::Neutral, Doctrine::Military, Doctrine::Bandit, Doctrine::Forsworn,
+                 Doctrine::Thalmor, Doctrine::Vampire, Doctrine::Daedra, Doctrine::Undead, Doctrine::Caster }) {
+            for (const float level : { 1.0F, 5.0F, 12.0F, 25.0F, 45.0F }) {
+                for (const float skill : { 0.0F, 25.0F, 60.0F, 95.0F }) {
+                    for (const bool perkHolder : { false, true }) {
+                        for (const float health : { 1.0F, 0.6F, 0.3F, 0.05F }) {
+                            for (const unsigned allies : { 0U, 1U, 3U }) {
+                                for (const unsigned foes : { 1U, 3U, 8U }) {
+                                    for (const unsigned casualties : { 0U, 2U, 4U }) {
+                                        for (const bool leaderDown : { false, true }) {
+                                            for (const float foeLevel : { 1.0F, 30.0F, 90.0F }) {
+                                                Profile p;
+                                                p.doctrine = doctrine;
+                                                p.level = level;
+                                                p.skill = skill;
+                                                p.master = perkHolder;
+                                                Situation s;
+                                                s.health = health;
+                                                s.allies = allies;
+                                                s.foes = foes;
+                                                s.casualties = casualties;
+                                                s.leaderDown = leaderDown;
+                                                s.foeLevel = foeLevel;
+                                                const Mind verdict = Think(p, s);
+                                                ++fights;
+                                                for (const float base : { 2.0F, 3.0F, 4.0F }) {
+                                                    const float rare = WantedConfidence(base, verdict.confidenceShift, verdict.routed, Fleeing::Rare);
+                                                    const float never = WantedConfidence(base, verdict.confidenceShift, verdict.routed, Fleeing::Never);
+                                                    assert(never >= base);                       // Never: nothing ever lowers it
+                                                    assert(verdict.routed || rare >= base);            // Rare: not without a rout
+                                                    assert(rare >= 2.0F);                        // Rare: never below Average
+                                                    if (verdict.routed) {
+                                                        assert(verdict.tier == Tier::Rabble && allies > 0 && !perkHolder);
+                                                        assert(!Fearless(doctrine));
+                                                    }
+                                                }
+                                                routs += verdict.routed ? 1U : 0U;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert(fights > 100000 && routs > 0 && routs < fights / 4);   // a rout exists, and it is the exception
+        std::printf("fleeing sweep: %u fights, %u routed\n", fights, routs);
+    }
+    {
+        assert(ParseFleeing("never") == Fleeing::Never && ParseFleeing("0") == Fleeing::Never);
+        assert(ParseFleeing("rare") == Fleeing::Rare && ParseFleeing("1") == Fleeing::Rare);
+        assert(ParseFleeing("often") == Fleeing::Often && ParseFleeing("2") == Fleeing::Often);
+        assert(!ParseFleeing("sometimes") && !ParseFleeing(""));
+    }
+
 #ifdef NCAI_SELFTEST_FAIL
     assert(false && "self-test: assertions are live");
 #endif
